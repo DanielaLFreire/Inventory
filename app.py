@@ -436,6 +436,10 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
             with st.spinner("Testando modelos hipsométricos..."):
 
                 # Filtrar dados
+                # ==================== CORREÇÃO COMPLETA DA ALTURA DOMINANTE ====================
+                # Substituir a seção que vai aproximadamente da linha 250 até 340 por este código:
+
+                # Filtrar dados para modelos hipsométricos
                 df_hip = df_inventario.copy()
 
                 if talhoes_excluir:
@@ -451,152 +455,395 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
                 if codigos_excluir:
                     df_hip = df_hip[~df_hip['cod'].isin(codigos_excluir)]
 
-                st.info(f"📊 Dados para modelos hipsométricos: {len(df_hip)} observações")
+                #st.info(f"📊 Dados para modelos hipsométricos: {len(df_hip)} observações")
+
+
+                # ==================== CÁLCULO DE ALTURA DOMINANTE - CORRIGIDO ====================
+
+                def calcular_altura_dominante(df):
+                    """Calcula altura dominante por parcela com múltiplas estratégias"""
+
+                    dominantes_list = []
+
+                    # Estratégia 1: Usar árvores marcadas como dominantes (cod = 'D')
+                    arvores_dominantes = df[df['cod'] == 'D']
+
+                    if len(arvores_dominantes) > 0:
+                        #st.info("✅ Usando árvores marcadas como dominantes (cod = 'D')")
+                        dominantes_parcela = arvores_dominantes.groupby('parcela')['H_m'].mean().reset_index()
+                        dominantes_parcela.columns = ['parcela', 'H_dom']
+                        dominantes_list.extend(dominantes_parcela.to_dict('records'))
+
+                        # Parcelas que já têm dominantes
+                        parcelas_com_dominantes = set(dominantes_parcela['parcela'])
+                    else:
+                        st.info("⚠️ Nenhuma árvore marcada como dominante (cod = 'D') encontrada")
+                        parcelas_com_dominantes = set()
+
+                    # Estratégia 2: Para parcelas sem dominantes, calcular automaticamente
+                    todas_parcelas = set(df['parcela'].unique())
+                    parcelas_sem_dominantes = todas_parcelas - parcelas_com_dominantes
+
+                    if parcelas_sem_dominantes:
+                        #st.info(f"🔄 Calculando altura dominante para {len(parcelas_sem_dominantes)} parcelas restantes")
+
+                        for parcela in parcelas_sem_dominantes:
+                            dados_parcela = df[df['parcela'] == parcela]
+
+                            if len(dados_parcela) > 0:
+                                # Pegar as 3 maiores árvores em diâmetro (ou todas se menos de 3)
+                                n_arvores = min(3, len(dados_parcela))
+                                maiores_arvores = dados_parcela.nlargest(n_arvores, 'D_cm')
+                                h_dom = maiores_arvores['H_m'].mean()
+
+                                dominantes_list.append({
+                                    'parcela': parcela,
+                                    'H_dom': h_dom
+                                })
+
+                    # Converter para DataFrame
+                    if dominantes_list:
+                        dominantes_df = pd.DataFrame(dominantes_list)
+
+                        # Verificar e corrigir valores
+                        dominantes_df['H_dom'] = dominantes_df['H_dom'].fillna(df['H_m'].mean())
+
+                        #st.success(f"✅ Altura dominante calculada para {len(dominantes_df)} parcelas")
+                        #st.info(f"📊 H_dom médio: {dominantes_df['H_dom'].mean():.1f}m (min: {dominantes_df['H_dom'].min():.1f}m, max: {dominantes_df['H_dom'].max():.1f}m)")
+
+                        return dominantes_df
+                    else:
+                        # Fallback extremo: usar altura média geral
+                        st.warning("⚠️ Fallback: Usando altura média geral como H_dom")
+                        parcelas_unicas = df['parcela'].unique()
+                        h_media = df['H_m'].mean()
+
+                        dominantes_df = pd.DataFrame({
+                            'parcela': parcelas_unicas,
+                            'H_dom': [h_media] * len(parcelas_unicas)
+                        })
+
+                        return dominantes_df
+
 
                 # Calcular altura dominante
-                dominantes = df_hip[df_hip['cod'] == 'D'].groupby('parcela')['H_m'].mean().reset_index()
-                dominantes.columns = ['parcela', 'H_dom']
+                try:
+                    dominantes = calcular_altura_dominante(df_hip)
+                except Exception as e:
+                    st.error(f"❌ Erro ao calcular altura dominante: {e}")
 
-                if len(dominantes) == 0:
-                    st.warning("⚠️ Calculando H_dom automaticamente")
-                    dominantes = df_hip.groupby('parcela').apply(
-                        lambda x: x.nlargest(min(3, len(x)), 'D_cm')['H_m'].mean()
-                    ).reset_index()
-                    dominantes.columns = ['parcela', 'H_dom']
+                    # Fallback de emergência
+                    st.warning("🚨 Usando fallback de emergência para H_dom")
+                    parcelas_unicas = df_hip['parcela'].unique()
+                    h_media = df_hip['H_m'].mean()
 
-                df_hip = df_hip.merge(dominantes, on='parcela', how='left')
-                df_hip['H_dom'] = df_hip['H_dom'].fillna(df_hip['H_m'].mean())
-
-                # Criar variáveis transformadas
-                df_hip['ln_H'] = np.log(df_hip['H_m'])
-                df_hip['inv_D'] = 1 / df_hip['D_cm']
-                df_hip['D2'] = df_hip['D_cm'] ** 2
-                df_hip['ln_D'] = np.log(df_hip['D_cm'])
-                df_hip['ln_H_dom'] = np.log(df_hip['H_dom'])
-                df_hip['Prod'] = df_hip['D_cm'] ** 2 / (df_hip['H_m'] - 1.3)
-
-                if 'idade_anos' in df_hip.columns:
-                    df_hip['DI'] = df_hip['D_cm'] * df_hip['idade_anos']
+                    dominantes = pd.DataFrame({
+                        'parcela': parcelas_unicas,
+                        'H_dom': [h_media] * len(parcelas_unicas)
+                    })
 
 
-                # Função para ajustar modelo linear
-                def ajustar_modelo_linear(X, y):
-                    modelo = LinearRegression()
-                    modelo.fit(X, y)
-                    y_pred = modelo.predict(X)
-                    r2 = r2_score(y, y_pred)
-                    rmse = np.sqrt(mean_squared_error(y, y_pred))
-                    return {'modelo': modelo, 'r2': r2, 'rmse': rmse, 'y_pred': y_pred}
+                # ==================== CRIAÇÃO DE VARIÁVEIS - CORRIGIDA ====================
+
+                def criar_variaveis_seguras(df_hip, dominantes):
+                    """Cria variáveis para modelos com máxima segurança"""
+
+                    try:
+                        #st.info("🔧 Criando variáveis transformadas...")
+
+                        # 1. Fazer merge com dominantes
+                        if 'H_dom' not in df_hip.columns:
+                            df_hip = df_hip.merge(dominantes, on='parcela', how='left')
+
+                        # 2. Verificar e corrigir H_dom
+                        if 'H_dom' not in df_hip.columns:
+                            st.warning("⚠️ H_dom não encontrado após merge - criando manualmente")
+                            df_hip['H_dom'] = df_hip['H_m'].mean()
+
+                        # Preencher H_dom faltante
+                        h_dom_medio = df_hip['H_dom'].mean()
+                        if pd.isna(h_dom_medio) or h_dom_medio <= 0:
+                            h_dom_medio = df_hip['H_m'].mean()
+
+                        df_hip['H_dom'] = df_hip['H_dom'].fillna(h_dom_medio)
+
+                        # 3. Verificar dados básicos
+                        #st.info(f"✅ H_dom: média = {df_hip['H_dom'].mean():.1f}m, valores únicos = {df_hip['H_dom'].nunique()}")
+
+                        # 4. Criar variáveis transformadas com clipping
+                        df_hip['ln_H'] = np.log(df_hip['H_m'].clip(lower=0.1))
+                        df_hip['inv_D'] = 1 / df_hip['D_cm'].clip(lower=0.1)
+                        df_hip['D2'] = df_hip['D_cm'] ** 2
+                        df_hip['ln_D'] = np.log(df_hip['D_cm'].clip(lower=0.1))
+                        df_hip['ln_H_dom'] = np.log(df_hip['H_dom'].clip(lower=0.1))
+
+                        # 5. Produtividade (Prod)
+                        h_adjusted = (df_hip['H_m'] - 1.3).clip(lower=0.1)
+                        df_hip['Prod'] = df_hip['D2'] / h_adjusted
+
+                        # 6. Idade (se disponível)
+                        if 'idade_anos' in df_hip.columns:
+                            idade_media = df_hip['idade_anos'].mean()
+                            if pd.isna(idade_media) or idade_media <= 0:
+                                idade_media = 5.0  # Default
+
+                            df_hip['idade_anos'] = df_hip['idade_anos'].fillna(idade_media)
+                            df_hip['DI'] = df_hip['D_cm'] * df_hip['idade_anos']
+
+                            #st.info(f"✅ Idade: média = {df_hip['idade_anos'].mean():.1f} anos")
+                        else:
+                            st.info("ℹ️ Coluna 'idade_anos' não encontrada - modelos sem idade serão usados")
+
+                        # 7. Verificar se todas as variáveis foram criadas
+                        variaveis_esperadas = ['ln_H', 'inv_D', 'D2', 'ln_D', 'ln_H_dom', 'Prod', 'H_dom']
+                        variaveis_criadas = [var for var in variaveis_esperadas if var in df_hip.columns]
+
+                        #st.success(f"✅ Variáveis criadas: {len(variaveis_criadas)}/{len(variaveis_esperadas)}")
+                        #st.info(f"📋 Variáveis: {', '.join(variaveis_criadas)}")
+
+                        # 8. Estatísticas de qualidade
+                        col1, col2, col3, col4 = st.columns(4)
+
+                        with col1:
+                            st.metric("Registros", len(df_hip))
+                        with col2:
+                            st.metric("DAP médio", f"{df_hip['D_cm'].mean():.1f} cm")
+                        with col3:
+                            st.metric("H médio", f"{df_hip['H_m'].mean():.1f} m")
+                        with col4:
+                            st.metric("H_dom médio", f"{df_hip['H_dom'].mean():.1f} m")
+
+                        return df_hip
+
+                    except Exception as e:
+                        st.error(f"❌ Erro ao criar variáveis: {e}")
+
+                        # Debug: mostrar estado das variáveis
+                        st.error("🔍 Debug - Estado das variáveis:")
+                        st.error(f"- Colunas em df_hip: {list(df_hip.columns)}")
+                        if 'H_dom' in df_hip.columns:
+                            st.error(f"- H_dom existe: {df_hip['H_dom'].describe()}")
+                        else:
+                            st.error("- H_dom NÃO existe")
+
+                        raise e
+
+
+                # Aplicar criação de variáveis
+                df_hip = criar_variaveis_seguras(df_hip, dominantes)
+
+                # ==================== VERIFICAÇÃO FINAL ====================
+
+                # Verificar se tudo está OK antes de continuar
+                variaveis_obrigatorias = ['D_cm', 'H_m', 'H_dom', 'ln_H', 'inv_D', 'ln_D', 'ln_H_dom']
+                variaveis_faltantes = [var for var in variaveis_obrigatorias if var not in df_hip.columns]
+
+                if variaveis_faltantes:
+                    st.error(f"❌ Variáveis obrigatórias faltantes: {variaveis_faltantes}")
+                    st.stop()
+                #else:
+                    #st.success("✅ Todas as variáveis obrigatórias foram criadas com sucesso!")
+
+                # Mostrar preview dos dados preparados
+                with st.expander("👀 Preview dos Dados Preparados"):
+                    colunas_mostrar = ['D_cm', 'H_m', 'H_dom', 'ln_H', 'inv_D', 'ln_D', 'ln_H_dom', 'Prod']
+                    colunas_disponiveis = [col for col in colunas_mostrar if col in df_hip.columns]
+                    st.dataframe(df_hip[colunas_disponiveis].head(10))
+
+                # Função auxiliar para limpeza de dados
+                def ajustar_modelo_seguro(X, y, nome_modelo):
+                    """Ajusta modelo com tratamento de NaN"""
+                    try:
+                        # Verificar NaN
+                        if X.isna().any().any() or y.isna().any():
+                            # Limpar dados
+                            mask_validos = ~(X.isna().any(axis=1) | y.isna())
+                            X_clean = X[mask_validos]
+                            y_clean = y[mask_validos]
+
+                            if len(X_clean) < 10:
+                                raise ValueError(f"Poucos dados válidos: {len(X_clean)}")
+
+                            #st.info(f"🧹 {nome_modelo}: {len(X_clean)}/{len(X)} observações válidas")
+                        else:
+                            X_clean = X
+                            y_clean = y
+
+                        # Ajustar modelo
+                        modelo = LinearRegression()
+                        modelo.fit(X_clean, y_clean)
+
+                        # Predições para todo dataset (preenchendo NaN)
+                        X_pred = X.fillna(X.mean())
+                        y_pred = modelo.predict(X_pred)
+
+                        r2 = r2_score(y.fillna(y.mean()), y_pred)
+                        rmse = np.sqrt(mean_squared_error(y.fillna(y.mean()), y_pred))
+
+                        return {'modelo': modelo, 'r2': r2, 'rmse': rmse, 'y_pred': y_pred}
+
+                    except Exception as e:
+                        st.warning(f"⚠️ Erro em {nome_modelo}: {e}")
+                        return None
 
 
                 def calcular_r2_generalizado(y_obs, y_pred):
                     return 1 - (np.sum((y_obs - y_pred) ** 2) / np.sum((y_obs - np.mean(y_obs)) ** 2))
 
 
-                # Ajustar modelos hipsométricos
+                # Ajustar modelos hipsométricos com tratamento de erros
                 resultados_hip = {}
                 predicoes_hip = {}
 
                 # 1. Curtis
-                try:
-                    X = df_hip[['inv_D']]
-                    y = df_hip['ln_H']
-                    resultado = ajustar_modelo_linear(X, y)
+                resultado = ajustar_modelo_seguro(df_hip[['inv_D']], df_hip['ln_H'], 'Curtis')
+                if resultado:
                     predicoes_hip['Curtis'] = np.exp(resultado['y_pred'])
                     r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Curtis'])
                     resultados_hip['Curtis'] = {'r2g': r2g, 'rmse': np.sqrt(
                         mean_squared_error(df_hip['H_m'], predicoes_hip['Curtis']))}
-                except Exception as e:
-                    st.warning(f"⚠️ Erro no modelo Curtis: {e}")
 
                 # 2. Campos
-                try:
-                    X = df_hip[['inv_D', 'ln_H_dom']]
-                    y = df_hip['ln_H']
-                    resultado = ajustar_modelo_linear(X, y)
+                resultado = ajustar_modelo_seguro(df_hip[['inv_D', 'ln_H_dom']], df_hip['ln_H'], 'Campos')
+                if resultado:
                     predicoes_hip['Campos'] = np.exp(resultado['y_pred'])
                     r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Campos'])
                     resultados_hip['Campos'] = {'r2g': r2g, 'rmse': np.sqrt(
                         mean_squared_error(df_hip['H_m'], predicoes_hip['Campos']))}
-                except Exception as e:
-                    st.warning(f"⚠️ Erro no modelo Campos: {e}")
 
                 # 3. Henri
-                try:
-                    X = df_hip[['ln_D']]
-                    y = df_hip['H_m']
-                    resultado = ajustar_modelo_linear(X, y)
+                resultado = ajustar_modelo_seguro(df_hip[['ln_D']], df_hip['H_m'], 'Henri')
+                if resultado:
                     predicoes_hip['Henri'] = resultado['y_pred']
                     r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Henri'])
                     resultados_hip['Henri'] = {'r2g': r2g, 'rmse': resultado['rmse']}
-                except Exception as e:
-                    st.warning(f"⚠️ Erro no modelo Henri: {e}")
 
-                # 4. Prodan
+                # 4. Prodan - VERSÃO ROBUSTA
                 try:
-                    if 'idade_anos' in df_hip.columns and 'DI' in df_hip.columns:
-                        X = df_hip[['D_cm', 'D2', 'DI']]
+                    # Verificar disponibilidade de idade
+                    tem_idade = 'idade_anos' in df_hip.columns and df_hip['idade_anos'].notna().sum() > 10
+
+                    if tem_idade:
+                        # Versão com idade
+                        colunas = ['D_cm', 'D2', 'DI']
+                        mask_validos = df_hip[colunas + ['Prod']].notna().all(axis=1)
+
+                        if mask_validos.sum() >= 10:
+                            df_clean = df_hip[mask_validos]
+                            resultado = ajustar_modelo_seguro(df_clean[colunas], df_clean['Prod'], 'Prodan (com idade)')
+
+                            if resultado:
+                                # Predição para todo dataset
+                                X_pred = df_hip[colunas].fillna(df_hip[colunas].mean())
+                                y_pred_prodan = resultado['modelo'].predict(X_pred)
+
+                                predicoes_hip['Prodan'] = (df_hip['D2'] / np.clip(y_pred_prodan, 0.1, None)) + 1.3
+                                r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Prodan'])
+                                resultados_hip['Prodan'] = {'r2g': r2g, 'rmse': np.sqrt(
+                                    mean_squared_error(df_hip['H_m'], predicoes_hip['Prodan']))}
+                                #st.success("✅ Prodan: Modelo com idade ajustado")
+                            else:
+                                raise ValueError("Falha no ajuste com idade")
+                        else:
+                            raise ValueError("Poucos dados válidos com idade")
                     else:
-                        X = df_hip[['D_cm', 'D2']]
+                        raise ValueError("Idade não disponível")
 
-                    y = df_hip['Prod']
-                    resultado = ajustar_modelo_linear(X, y)
-                    predicoes_hip['Prodan'] = (df_hip['D2'] / resultado['y_pred']) + 1.3
-                    r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Prodan'])
-                    resultados_hip['Prodan'] = {'r2g': r2g, 'rmse': np.sqrt(
-                        mean_squared_error(df_hip['H_m'], predicoes_hip['Prodan']))}
                 except Exception as e:
-                    st.warning(f"⚠️ Erro no modelo Prodan: {e}")
+                    # Fallback: Prodan sem idade
+                    try:
+                        #st.info("🔄 Prodan: Tentando versão sem idade...")
+                        colunas = ['D_cm', 'D2']
+                        resultado = ajustar_modelo_seguro(df_hip[colunas], df_hip['Prod'], 'Prodan (sem idade)')
+
+                        if resultado:
+                            X_pred = df_hip[colunas].fillna(df_hip[colunas].mean())
+                            y_pred_prodan = resultado['modelo'].predict(X_pred)
+
+                            predicoes_hip['Prodan'] = (df_hip['D2'] / np.clip(y_pred_prodan, 0.1, None)) + 1.3
+                            r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Prodan'])
+                            resultados_hip['Prodan'] = {'r2g': r2g, 'rmse': np.sqrt(
+                                mean_squared_error(df_hip['H_m'], predicoes_hip['Prodan']))}
+                            #st.success("✅ Prodan: Modelo simplificado (sem idade) ajustado")
+                        else:
+                            st.warning("⚠️ Prodan: Falha em todas as versões - modelo não incluído")
+
+                    except Exception as e2:
+                        st.warning(f"⚠️ Prodan: Falha completa - {e2}")
 
 
-                # Modelos não-lineares
+                # Modelos não-lineares com tratamento de erros
+                def ajustar_modelo_nao_linear(func, params_iniciais, nome):
+                    """Ajusta modelo não-linear com tratamento de erros"""
+                    try:
+                        # Limpar dados
+                        mask_validos = df_hip[['D_cm', 'H_m']].notna().all(axis=1)
+                        if mask_validos.sum() < 20:
+                            raise ValueError("Poucos dados válidos para modelo não-linear")
+
+                        D_clean = df_hip.loc[mask_validos, 'D_cm']
+                        H_clean = df_hip.loc[mask_validos, 'H_m']
+
+                        # Ajustar
+                        popt, _ = curve_fit(func, D_clean, H_clean, p0=params_iniciais, maxfev=5000)
+
+                        # Predições para todo dataset
+                        D_pred = df_hip['D_cm'].fillna(df_hip['D_cm'].mean())
+                        H_pred = func(D_pred, *popt)
+
+                        return H_pred, popt
+
+                    except Exception as e:
+                        st.warning(f"⚠️ Erro no modelo {nome}: {e}")
+                        return None, None
+
+
+                # 5. Chapman
                 def chapman_func(D, b0, b1, b2):
                     return b0 * (1 - np.exp(-b1 * D)) ** b2
 
 
+                altura_max = df_hip['H_m'].max() * 1.2
+                H_pred, popt = ajustar_modelo_nao_linear(chapman_func, [altura_max, 0.01, 1.0], 'Chapman')
+                if H_pred is not None:
+                    predicoes_hip['Chapman'] = H_pred
+                    r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Chapman'])
+                    resultados_hip['Chapman'] = {'r2g': r2g, 'rmse': np.sqrt(
+                        mean_squared_error(df_hip['H_m'], predicoes_hip['Chapman']))}
+
+
+                # 6. Weibull
                 def weibull_func(D, a, b, c):
                     return a * (1 - np.exp(-b * D ** c))
 
 
+                H_pred, popt = ajustar_modelo_nao_linear(weibull_func, [altura_max, 0.01, 1.0], 'Weibull')
+                if H_pred is not None:
+                    predicoes_hip['Weibull'] = H_pred
+                    r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Weibull'])
+                    resultados_hip['Weibull'] = {'r2g': r2g, 'rmse': np.sqrt(
+                        mean_squared_error(df_hip['H_m'], predicoes_hip['Weibull']))}
+
+
+                # 7. Mononuclear
                 def mono_func(D, a, b, c):
                     return a * (1 - b * np.exp(-c * D))
 
 
-                # 5. Chapman
-                try:
-                    altura_max = df_hip['H_m'].max() * 1.2
-                    popt, _ = curve_fit(chapman_func, df_hip['D_cm'], df_hip['H_m'],
-                                        p0=[altura_max, 0.01, 1.0], maxfev=5000)
-                    predicoes_hip['Chapman'] = chapman_func(df_hip['D_cm'], *popt)
-                    r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Chapman'])
-                    resultados_hip['Chapman'] = {'r2g': r2g, 'rmse': np.sqrt(
-                        mean_squared_error(df_hip['H_m'], predicoes_hip['Chapman']))}
-                except Exception as e:
-                    st.warning(f"⚠️ Erro no modelo Chapman: {e}")
-
-                # 6. Weibull
-                try:
-                    altura_max = df_hip['H_m'].max() * 1.2
-                    popt, _ = curve_fit(weibull_func, df_hip['D_cm'], df_hip['H_m'],
-                                        p0=[altura_max, 0.01, 1.0], maxfev=5000)
-                    predicoes_hip['Weibull'] = weibull_func(df_hip['D_cm'], *popt)
-                    r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Weibull'])
-                    resultados_hip['Weibull'] = {'r2g': r2g, 'rmse': np.sqrt(
-                        mean_squared_error(df_hip['H_m'], predicoes_hip['Weibull']))}
-                except Exception as e:
-                    st.warning(f"⚠️ Erro no modelo Weibull: {e}")
-
-                # 7. Mononuclear
-                try:
-                    altura_max = df_hip['H_m'].max() * 1.2
-                    popt, _ = curve_fit(mono_func, df_hip['D_cm'], df_hip['H_m'],
-                                        p0=[altura_max, 1.0, 0.1], maxfev=5000)
-                    predicoes_hip['Mononuclear'] = mono_func(df_hip['D_cm'], *popt)
+                H_pred, popt = ajustar_modelo_nao_linear(mono_func, [altura_max, 1.0, 0.1], 'Mononuclear')
+                if H_pred is not None:
+                    predicoes_hip['Mononuclear'] = H_pred
                     r2g = calcular_r2_generalizado(df_hip['H_m'], predicoes_hip['Mononuclear'])
                     resultados_hip['Mononuclear'] = {'r2g': r2g, 'rmse': np.sqrt(
                         mean_squared_error(df_hip['H_m'], predicoes_hip['Mononuclear']))}
-                except Exception as e:
-                    st.warning(f"⚠️ Erro no modelo Mononuclear: {e}")
+
+                # Verificar se pelo menos um modelo funcionou
+                if not resultados_hip:
+                    st.error("❌ Nenhum modelo hipsométrico foi ajustado com sucesso!")
+                    st.info("💡 Verifique a qualidade dos dados de entrada")
+                    st.stop()
+                #else:
+                    #st.success(f"✅ {len(resultados_hip)} modelos hipsométricos ajustados com sucesso!")
 
                 # Ranking dos modelos hipsométricos
                 if resultados_hip:
@@ -1101,17 +1348,19 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
             # ==================== RESULTADOS ====================
             st.header("📊 RESULTADOS FINAIS")
 
-            col1, col2, col3 = st.columns(3)
+            col1, col2, col3, col4 = st.columns(4)
 
             with col1:
-                vol_medio = inventario_resumo['Vol_ha'].mean()
-                st.metric("📊 Produtividade Média", f"{vol_medio:.1f} m³/ha")
                 st.metric("🌲 Parcelas Avaliadas", f"{len(inventario_resumo)}")
-
             with col2:
                 area_total = inventario_resumo['area_ha'].iloc[0] * len(inventario_resumo['talhao'].unique())
-                estoque_total = area_total * vol_medio
                 st.metric("📏 Área Total", f"{area_total:.1f} ha")
+
+            with col3:
+                vol_medio = inventario_resumo['Vol_ha'].mean()
+                st.metric("📊 Produtividade Média", f"{vol_medio:.1f} m³/ha")
+            with col4:
+                estoque_total = area_total * vol_medio
                 st.metric("🌲 Estoque Total", f"{estoque_total:,.0f} m³")
 
             # Abas de resultados

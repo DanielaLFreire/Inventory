@@ -57,7 +57,7 @@ six==1.17.0
 sklearnn==0.0.1
 smmap==5.0.2
 spicy==0.16.0
-streamlit==1.35.0
+streamlit==1.47.0
 tenacity==8.5.0
 threadpoolctl==3.6.0
 toml==0.10.2
