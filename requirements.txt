@@ -1,0 +1,19 @@
+# ============================================================================
+# Requirements MÍNIMOS - Sistema de Inventário Florestal
+# Python 3.12.3 - Versão Essencial
+# ============================================================================
+
+# Essenciais (obrigatórios)
+streamlit
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+scipy
+openpyxl
+
+# ============================================================================
+# Instalação rápida:
+# pip install -r requirements-minimo.txt
+# ============================================================================
