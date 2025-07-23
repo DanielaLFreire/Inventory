@@ -13,7 +13,7 @@ warnings.filterwarnings('ignore')
 
 # ==================== CONFIGURAÇÃO DA PÁGINA ====================
 st.set_page_config(
-    page_title="Sistema Completo de Inventário Florestal",
+    page_title="Sistema Integrado de Inventário Florestal",
     page_icon="🌲",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -23,10 +23,10 @@ st.set_page_config(
 # ==================== FUNÇÕES AUXILIARES ====================
 
 def carregar_arquivo(arquivo):
-    '''Carrega arquivo CSV ou Excel com máxima compatibilidade'''
+    """Carrega arquivo CSV ou Excel com máxima compatibilidade"""
     try:
         if arquivo.name.endswith('.csv'):
-            # Tentar diferentes separadores para CSV
+            # Tentar diferentes separadores e encodings para CSV
             separadores = [';', ',', '\t']
             for sep in separadores:
                 try:
@@ -122,70 +122,151 @@ def carregar_arquivo(arquivo):
 
 
 def verificar_colunas_inventario(df):
-    '''Verifica colunas obrigatórias do inventário'''
+    """Verifica colunas obrigatórias do inventário"""
     obrigatorias = ['D_cm', 'H_m', 'talhao', 'parcela', 'cod']
     faltantes = [col for col in obrigatorias if col not in df.columns]
     return faltantes
 
 
 def verificar_colunas_cubagem(df):
-    '''Verifica colunas obrigatórias da cubagem'''
+    """Verifica colunas obrigatórias da cubagem"""
     obrigatorias = ['arv', 'talhao', 'd_cm', 'h_m', 'D_cm', 'H_m']
     faltantes = [col for col in obrigatorias if col not in df.columns]
     return faltantes
 
 
+def processar_shapefile(arquivo_shp):
+    """Processa shapefile para extrair áreas dos talhões"""
+    try:
+        # Tentar ler shapefile (se geopandas estiver disponível)
+        try:
+            import geopandas as gpd
+
+            if arquivo_shp.name.endswith('.zip'):
+                # Se for ZIP, extrair e ler
+                import zipfile
+                import tempfile
+                import os
+
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    with zipfile.ZipFile(arquivo_shp, 'r') as zip_ref:
+                        zip_ref.extractall(temp_dir)
+
+                    # Procurar arquivo .shp
+                    shp_files = [f for f in os.listdir(temp_dir) if f.endswith('.shp')]
+                    if shp_files:
+                        shp_path = os.path.join(temp_dir, shp_files[0])
+                        gdf = gpd.read_file(shp_path)
+                    else:
+                        raise Exception("Arquivo .shp não encontrado no ZIP")
+            else:
+                # Arquivo .shp direto
+                gdf = gpd.read_file(arquivo_shp)
+
+            # Processar dados (similar ao código R)
+            # Procurar coluna de talhão (variações possíveis)
+            col_talhao = None
+            for col in gdf.columns:
+                if col.lower() in ['talhao', 'talhão', 'talh', 'plot', 'stand']:
+                    col_talhao = col
+                    break
+
+            if col_talhao is None:
+                raise Exception("Coluna de talhão não encontrada (procure: talhao, talhão, talh)")
+
+            # Procurar coluna de área
+            col_area = None
+            for col in gdf.columns:
+                if col.lower() in ['area_ha', 'area', 'hectares', 'ha', 'area_m2']:
+                    col_area = col
+                    break
+
+            if col_area is None:
+                # Calcular área da geometria
+                gdf['area_ha'] = gdf.geometry.area / 10000  # Converter m² para ha
+                col_area = 'area_ha'
+
+            # Agrupar por talhão e somar áreas (como no R)
+            areas_df = gdf.groupby(col_talhao)[col_area].sum().reset_index()
+            areas_df.columns = ['talhao', 'area_ha']
+            areas_df['talhao'] = areas_df['talhao'].astype(int)
+
+            return areas_df
+
+        except ImportError:
+            st.error("❌ GeoPandas não está instalado")
+            st.error("🔧 Execute: pip install geopandas")
+            return None
+
+    except Exception as e:
+        st.error(f"❌ Erro ao processar shapefile: {e}")
+        st.info("💡 Verifique se o arquivo contém colunas 'talhao' e 'area_ha'")
+        return None
+
+
+def processar_coordenadas(arquivo_coord, raio_parcela):
+    """Processa coordenadas para calcular áreas dos talhões"""
+    try:
+        # Carregar arquivo de coordenadas
+        df_coord = carregar_arquivo(arquivo_coord)
+
+        if df_coord is None:
+            return None
+
+        # Verificar colunas necessárias
+        colunas_necessarias = []
+        for col_set in [['x', 'y'], ['X', 'Y'], ['lon', 'lat'], ['longitude', 'latitude']]:
+            if all(col in df_coord.columns for col in col_set):
+                colunas_necessarias = col_set
+                break
+
+        if not colunas_necessarias:
+            st.error("❌ Coordenadas: colunas X,Y ou lon,lat não encontradas")
+            return None
+
+        # Verificar coluna de talhão
+        col_talhao = None
+        for col in df_coord.columns:
+            if col.lower() in ['talhao', 'talhão', 'talh', 'plot', 'stand']:
+                col_talhao = col
+                break
+
+        if col_talhao is None:
+            st.error("❌ Coordenadas: coluna 'talhao' não encontrada")
+            return None
+
+        # Calcular área circular da parcela
+        area_parcela_ha = 3.14159 * (raio_parcela ** 2) / 10000  # Converter m² para ha
+
+        # Contar parcelas por talhão e calcular área total
+        parcelas_por_talhao = df_coord.groupby(col_talhao).size().reset_index()
+        parcelas_por_talhao.columns = ['talhao', 'num_parcelas']
+        parcelas_por_talhao['area_ha'] = parcelas_por_talhao['num_parcelas'] * area_parcela_ha
+
+        areas_df = parcelas_por_talhao[['talhao', 'area_ha']].copy()
+        areas_df['talhao'] = areas_df['talhao'].astype(int)
+
+        return areas_df
+
+    except Exception as e:
+        st.error(f"❌ Erro ao processar coordenadas: {e}")
+        return None
+
+
 # ==================== TÍTULO E DESCRIÇÃO ====================
-st.title("🌲 Sistema Completo Integrado de Inventário Florestal")
-st.markdown('''
+st.title("🌲 Sistema Integrado de Inventário Florestal")
+st.markdown("""
 ### 📊 Análise Completa: Hipsométrica → Volumétrica → Inventário
 
 Este sistema integra **três etapas sequenciais** para análise florestal completa:
 
 1. **🌳 ETAPA 1: Modelos Hipsométricos** - Testa 7 modelos e escolhe o melhor
 2. **📊 ETAPA 2: Modelos Volumétricos** - Cubagem e 4 modelos de volume  
-3. **📈 ETAPA 3: Inventário Completo** - Aplica modelos e gera relatórios
-''')
+3. **📈 ETAPA 3: Inventário Florestal** - Aplica modelos e gera relatórios
+""")
 
 # ==================== SIDEBAR ====================
 st.sidebar.header("📁 Upload de Dados")
-
-# Diagnóstico rápido de dependências (opcional para debug)
-if st.sidebar.button("🔍 Verificar Dependências"):
-    st.sidebar.write("**Diagnóstico:**")
-
-    # Testar openpyxl
-    try:
-        import openpyxl
-
-        st.sidebar.success("✅ openpyxl instalado")
-    except ImportError:
-        st.sidebar.error("❌ openpyxl não encontrado")
-
-    # Testar xlrd
-    try:
-        import xlrd
-
-        st.sidebar.success("✅ xlrd instalado")
-    except ImportError:
-        st.sidebar.error("❌ xlrd não encontrado")
-
-    # Testar pandas
-    st.sidebar.info(f"📦 pandas: {pd.__version__}")
-
-    # Testar leitura Excel simples
-    try:
-        # Criar arquivo Excel temporário na memória para teste
-        import io
-
-        test_data = pd.DataFrame({'A': [1, 2], 'B': [3, 4]})
-        buffer = io.BytesIO()
-        test_data.to_excel(buffer, index=False)
-        buffer.seek(0)
-        test_read = pd.read_excel(buffer)
-        st.sidebar.success("✅ pd.read_excel() funcionando")
-    except Exception as e:
-        st.sidebar.error(f"❌ pd.read_excel() erro: {str(e)[:50]}...")
 
 arquivo_inventario = st.sidebar.file_uploader(
     "📋 Arquivo de Inventário",
@@ -197,6 +278,20 @@ arquivo_cubagem = st.sidebar.file_uploader(
     "📏 Arquivo de Cubagem",
     type=['csv', 'xlsx', 'xls'],
     help="Medições detalhadas (arv, talhao, d_cm, h_m, D_cm, H_m)"
+)
+
+# Upload opcional de shapefile para áreas
+arquivo_shapefile = st.sidebar.file_uploader(
+    "🗺️ Shapefile Áreas (Opcional)",
+    type=['shp', 'zip'],
+    help="Arquivo shapefile com áreas dos talhões"
+)
+
+# Upload opcional de coordenadas
+arquivo_coordenadas = st.sidebar.file_uploader(
+    "📍 Coordenadas Parcelas (Opcional)",
+    type=['csv', 'xlsx', 'xls'],
+    help="Arquivo com coordenadas X,Y das parcelas"
 )
 
 # ==================== PROCESSAMENTO ====================
@@ -261,6 +356,76 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
                 options=sorted(df_inventario['cod'].unique()),
                 default=['C', 'I'] if set(['C', 'I']).issubset(df_inventario['cod'].unique()) else []
             )
+
+        # ==================== CONFIGURAÇÕES DE ÁREA ====================
+        st.subheader("📏 Configurações de Área")
+
+        col1_area, col2_area, col3_area = st.columns(3)
+
+        with col1_area:
+            # Determinar métodos disponíveis baseado nos uploads
+            metodos_disponiveis = ["Simular automaticamente", "Valores informados manualmente"]
+
+            if arquivo_shapefile is not None:
+                metodos_disponiveis.append("Upload shapefile")
+
+            if arquivo_coordenadas is not None:
+                metodos_disponiveis.append("Coordenadas das parcelas")
+
+            metodo_area = st.selectbox(
+                "🗺️ Método para Área dos Talhões",
+                options=metodos_disponiveis,
+                help="Como calcular as áreas dos talhões"
+            )
+
+        with col2_area:
+            area_parcela = st.number_input(
+                "📐 Área da Parcela (m²)",
+                min_value=100,
+                max_value=2000,
+                value=400,
+                step=100,
+                help="Área padrão: 400m² (20x20m) ou 1000m² (raio 17.84m)"
+            )
+
+        with col3_area:
+            if metodo_area == "Valores informados manualmente":
+                st.write("**Áreas por Talhão:**")
+                areas_manuais = {}
+                talhoes_disponiveis = sorted(df_inventario['talhao'].unique())
+                for talhao in talhoes_disponiveis:
+                    if talhao not in talhoes_excluir:
+                        areas_manuais[talhao] = st.number_input(
+                            f"Talhão {talhao} (ha)",
+                            min_value=0.1,
+                            max_value=1000.0,
+                            value=25.0,
+                            step=0.1,
+                            key=f"area_talhao_{talhao}"
+                        )
+
+            elif metodo_area == "Upload shapefile":
+                st.success("📁 Shapefile carregado!")
+                st.write("✅ Áreas serão extraídas automaticamente")
+
+            elif metodo_area == "Coordenadas das parcelas":
+                st.success("📍 Coordenadas carregadas!")
+                raio_parcela = st.number_input(
+                    "📐 Raio da Parcela (m)",
+                    min_value=5.0,
+                    max_value=30.0,
+                    value=11.28,
+                    step=0.1,
+                    help="Raio para calcular área circular (11.28m = 400m²)"
+                )
+                area_calculada = 3.14159 * (raio_parcela ** 2)
+                st.write(f"**Área calculada**: {area_calculada:.0f} m²")
+
+            else:
+                st.info("💡 **Opções adicionais:**")
+                st.write("- **Shapefile**: Faça upload para usar áreas reais")
+                st.write("- **Coordenadas**: Faça upload para cálculo automático")
+                st.write("- **Manual**: Digite áreas conhecidas")
 
         # ==================== BOTÃO PRINCIPAL ====================
         if st.button("🚀 Executar Análise Completa", type="primary", use_container_width=True):
@@ -468,15 +633,15 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
 
                                     # Classificação
                                     if r2_modelo >= 0.9:
-                                        qualidade = "🟢 Excelente"
+                                        qualidade = "***** Excelente"
                                     elif r2_modelo >= 0.8:
-                                        qualidade = "🔵 Muito Bom"
+                                        qualidade = "**** Muito Bom"
                                     elif r2_modelo >= 0.7:
-                                        qualidade = "🟡 Bom"
+                                        qualidade = "*** Bom"
                                     elif r2_modelo >= 0.6:
-                                        qualidade = "🟠 Regular"
+                                        qualidade = "** Regular"
                                     else:
-                                        qualidade = "🔴 Fraco"
+                                        qualidade = "* Fraco"
 
                                     st.write(
                                         f"**Ranking:** #{df_ranking_hip[df_ranking_hip['Modelo'] == modelo]['Ranking'].iloc[0]}")
@@ -728,15 +893,15 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
 
                             # Classificação
                             if r2_modelo >= 0.9:
-                                qualidade = "🟢 Excelente"
+                                qualidade = "***** Excelente"
                             elif r2_modelo >= 0.8:
-                                qualidade = "🔵 Muito Bom"
+                                qualidade = "**** Muito Bom"
                             elif r2_modelo >= 0.7:
-                                qualidade = "🟡 Bom"
+                                qualidade = "*** Bom"
                             elif r2_modelo >= 0.6:
-                                qualidade = "🟠 Regular"
+                                qualidade = "** Regular"
                             else:
-                                qualidade = "🔴 Fraco"
+                                qualidade = "* Fraco"
 
                             # Ranking
                             ranking_pos = sorted(r2_vol.keys(), key=lambda k: r2_vol[k], reverse=True).index(modelo) + 1
@@ -938,12 +1103,12 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
 
             col1, col2, col3 = st.columns(3)
 
-            with col2:
+            with col1:
                 vol_medio = inventario_resumo['Vol_ha'].mean()
                 st.metric("📊 Produtividade Média", f"{vol_medio:.1f} m³/ha")
                 st.metric("🌲 Parcelas Avaliadas", f"{len(inventario_resumo)}")
 
-            with col3:
+            with col2:
                 area_total = inventario_resumo['area_ha'].iloc[0] * len(inventario_resumo['talhao'].unique())
                 estoque_total = area_total * vol_medio
                 st.metric("📏 Área Total", f"{area_total:.1f} ha")
@@ -983,11 +1148,11 @@ if arquivo_inventario is not None and arquivo_cubagem is not None:
 
                 col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("🟢 Classe Alta", f"{classe_alta} parcelas", f"≥ {q75:.1f} m³/ha")
+                    st.metric("🌲🌲🌲 Classe Alta", f"{classe_alta} parcelas", f"≥ {q75:.1f} m³/ha")
                 with col2:
-                    st.metric("🟡 Classe Média", f"{classe_media} parcelas", f"{q25:.1f} - {q75:.1f} m³/ha")
+                    st.metric("🌲🌲 Classe Média", f"{classe_media} parcelas", f"{q25:.1f} - {q75:.1f} m³/ha")
                 with col3:
-                    st.metric("🔴 Classe Baixa", f"{classe_baixa} parcelas", f"< {q25:.1f} m³/ha")
+                    st.metric("🌲 Classe Baixa", f"{classe_baixa} parcelas", f"< {q25:.1f} m³/ha")
 
             with tab2:
                 st.subheader("🌳 Análise por Talhão")
@@ -1235,7 +1400,7 @@ else:
     2. **⚙️ Configuração** de filtros
     3. **🌳 Etapa 1**: Teste de 7 modelos hipsométricos → seleciona o melhor
     4. **📊 Etapa 2**: Cubagem (Smalian) + 4 modelos volumétricos → seleciona o melhor
-    5. **📈 Etapa 3**: Aplica os melhores modelos ao inventário completo
+    5. **📈 Etapa 3**: Aplica os melhores modelos ao inventário
     6. **📊 Resultados**: Análises, gráficos e relatórios
     ''')
 

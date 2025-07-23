@@ -56,7 +56,7 @@ O diferencial é a **seleção automática** dos melhores modelos e **integraç�
 - **Estimativas por parcela** com volumes e produtividade
 - **Análise por talhão** com estatísticas consolidadas
 - **Classificação de produtividade** automática (Alta, Média, Baixa)
-- **Cálculo de IMA** (Incremento Médio Anual)
+- **Cálculo de IMA** (Incremento Médio Anual - m³/ha/ano)
 
 ### 📊 **Métricas de Avaliação Avançadas**
 - **R² Generalizado** para modelos hipsométricos
@@ -256,6 +256,20 @@ pip install openpyxl xlrd pyxlsb
 - **Método**: Estratificação por quartis (Q25, Q75)
 - **Característica**: Pode **variar** com manejo e idade
 - **Aplicação**: Análise de desempenho atual e estratificação operacional
+
+### 🌳 **Métricas Florestais Importantes**
+
+**IMA (Incremento Médio Anual)**
+- **Fórmula**: `IMA = Volume atual (m³/ha) ÷ Idade (anos)`
+- **Significado**: Produtividade média anual do povoamento
+- **Unidade**: m³/ha/ano
+- **Aplicação**: Comparação de produtividade entre talhões e idades
+- **Exemplo**: Se um talhão de 6 anos tem 180 m³/ha → IMA = 30 m³/ha/ano
+
+**ICA (Incremento Corrente Anual)**
+- **Conceito**: Crescimento no último ano
+- **Relação**: Quando ICA = IMA → idade de rotação ótima
+- **Aplicação**: Determinação do momento ideal de corte
 
 ### 🌳 **Talhão vs Parcela**
 - **Talhão**: Unidade de manejo florestal (homogênea em idade/espécie)
