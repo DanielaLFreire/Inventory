@@ -1,4 +1,4 @@
-# app.py - Aplicação Principal Simplificada
+# Principal.py - Aplicação Principal Simplificada
 """
 Sistema Integrado de Inventário Florestal
 Hub Central de Navegação

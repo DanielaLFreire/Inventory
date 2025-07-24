@@ -1,6 +1,6 @@
-# ui/graficos.py
+# ui/graficos.py - VERSÃO CORRIGIDA
 """
-Interface para gráficos e visualizações
+Interface para gráficos e visualizações - COM CORREÇÃO DE MEMÓRIA
 """
 
 import streamlit as st
@@ -10,6 +10,17 @@ import pandas as pd
 import numpy as np
 from utils.formatacao import formatar_brasileiro, classificar_qualidade_modelo
 from config.config import CORES_MODELOS
+import contextlib
+
+
+@contextlib.contextmanager
+def criar_figura(*args, **kwargs):
+    """Context manager para criar e limpar figuras automaticamente"""
+    fig, ax = plt.subplots(*args, **kwargs)
+    try:
+        yield fig, ax
+    finally:
+        plt.close(fig)  # CORREÇÃO: Sempre fechar a figura
 
 
 def criar_graficos_modelos(df_dados, resultados, predicoes, tipo_modelo):
@@ -124,7 +135,7 @@ def mostrar_equacao_modelo_hipsometrico(modelo):
 
 def criar_grafico_ajuste_hipsometrico(modelo, df_hip, predicao, cor_idx):
     """
-    Cria gráfico de ajuste para modelo hipsométrico
+    Cria gráfico de ajuste para modelo hipsométrico - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         modelo: Nome do modelo
@@ -132,29 +143,30 @@ def criar_grafico_ajuste_hipsometrico(modelo, df_hip, predicao, cor_idx):
         predicao: Predições do modelo
         cor_idx: Índice da cor
     """
-    fig, ax = plt.subplots(figsize=(8, 6))
+    # CORREÇÃO: Usar context manager para gerenciar memória
+    with criar_figura(figsize=(8, 6)) as (fig, ax):
+        # Dados observados
+        ax.scatter(df_hip['D_cm'], df_hip['H_m'], alpha=0.4, color='gray', s=15, label='Observado')
 
-    # Dados observados
-    ax.scatter(df_hip['D_cm'], df_hip['H_m'], alpha=0.4, color='gray', s=15, label='Observado')
+        # Modelo específico
+        cor = CORES_MODELOS[cor_idx % len(CORES_MODELOS)]
+        ax.scatter(df_hip['D_cm'], predicao, alpha=0.7, color=cor, s=15, label=f'{modelo}')
 
-    # Modelo específico
-    cor = CORES_MODELOS[cor_idx % len(CORES_MODELOS)]
-    ax.scatter(df_hip['D_cm'], predicao, alpha=0.7, color=cor, s=15, label=f'{modelo}')
+        # Configurações do gráfico
+        r2_modelo = 1 - np.sum((df_hip['H_m'] - predicao) ** 2) / np.sum((df_hip['H_m'] - np.mean(df_hip['H_m'])) ** 2)
+        ax.set_title(f'{modelo} (R² = {r2_modelo:.3f})')
+        ax.set_xlabel('Diâmetro (cm)')
+        ax.set_ylabel('Altura (m)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
 
-    # Configurações do gráfico
-    r2_modelo = 1 - np.sum((df_hip['H_m'] - predicao) ** 2) / np.sum((df_hip['H_m'] - np.mean(df_hip['H_m'])) ** 2)
-    ax.set_title(f'{modelo} (R² = {r2_modelo:.3f})')
-    ax.set_xlabel('Diâmetro (cm)')
-    ax.set_ylabel('Altura (m)')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-    st.pyplot(fig)
+        st.pyplot(fig)
+        # Figure será fechada automaticamente pelo context manager
 
 
 def criar_graficos_residuos_hipsometricos(modelo, y_obs, y_pred, cor_idx):
     """
-    Cria gráficos de resíduos para modelo hipsométrico
+    Cria gráficos de resíduos para modelo hipsométrico - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         modelo: Nome do modelo
@@ -168,7 +180,6 @@ def criar_graficos_residuos_hipsometricos(modelo, y_obs, y_pred, cor_idx):
         # Converter tudo para numpy arrays primeiro
         y_obs_array = np.array(y_obs)
         y_pred_array = np.array(y_pred)
-
 
         # Garantir que ambos tenham o mesmo tamanho
         min_len = min(len(y_obs_array), len(y_pred_array))
@@ -202,40 +213,39 @@ def criar_graficos_residuos_hipsometricos(modelo, y_obs, y_pred, cor_idx):
         col1_res, col2_res = st.columns(2)
 
         with col1_res:
-            # Resíduos vs Preditos
-            fig_res1, ax_res1 = plt.subplots(figsize=(6, 5))
-            ax_res1.scatter(y_pred_plot, residuos_plot, alpha=0.6, color=cor)
-            ax_res1.axhline(y=0, color='red', linestyle='--')
-            ax_res1.set_xlabel('Valores Preditos (m)')
-            ax_res1.set_ylabel('Resíduos (m)')
-            ax_res1.set_title(f'Resíduos vs Preditos - {modelo}')
-            ax_res1.grid(True, alpha=0.3)
-            st.pyplot(fig_res1)
-            plt.close(fig_res1)  # Liberar memória
+            # CORREÇÃO: Resíduos vs Preditos com context manager
+            with criar_figura(figsize=(6, 5)) as (fig_res1, ax_res1):
+                ax_res1.scatter(y_pred_plot, residuos_plot, alpha=0.6, color=cor)
+                ax_res1.axhline(y=0, color='red', linestyle='--')
+                ax_res1.set_xlabel('Valores Preditos (m)')
+                ax_res1.set_ylabel('Resíduos (m)')
+                ax_res1.set_title(f'Resíduos vs Preditos - {modelo}')
+                ax_res1.grid(True, alpha=0.3)
+                st.pyplot(fig_res1)
+                # Figure será fechada automaticamente
 
         with col2_res:
-            # Histograma dos resíduos
-            fig_res2, ax_res2 = plt.subplots(figsize=(6, 5))
-            ax_res2.hist(residuos_plot, bins=min(15, len(residuos_plot) // 2), alpha=0.7, color=cor, edgecolor='black')
-            ax_res2.axvline(x=0, color='red', linestyle='--')
-            ax_res2.set_xlabel('Resíduos (m)')
-            ax_res2.set_ylabel('Frequência')
-            ax_res2.set_title(f'Distribuição dos Resíduos - {modelo}')
-            ax_res2.grid(True, alpha=0.3)
-            st.pyplot(fig_res2)
-            plt.close(fig_res2)  # Liberar memória
+            # CORREÇÃO: Histograma dos resíduos com context manager
+            with criar_figura(figsize=(6, 5)) as (fig_res2, ax_res2):
+                ax_res2.hist(residuos_plot, bins=min(15, len(residuos_plot) // 2), alpha=0.7, color=cor, edgecolor='black')
+                ax_res2.axvline(x=0, color='red', linestyle='--')
+                ax_res2.set_xlabel('Resíduos (m)')
+                ax_res2.set_ylabel('Frequência')
+                ax_res2.set_title(f'Distribuição dos Resíduos - {modelo}')
+                ax_res2.grid(True, alpha=0.3)
+                st.pyplot(fig_res2)
+                # Figure será fechada automaticamente
 
     except Exception as e:
-
         # Criar gráfico básico sem resíduos como fallback
         st.info(f"💡 Criando gráfico simplificado para {modelo}")
         try:
-            fig_simple, ax_simple = plt.subplots(figsize=(6, 4))
-            ax_simple.text(0.5, 0.5, f'Erro nos resíduos\ndo modelo {modelo}',
-                           ha='center', va='center', transform=ax_simple.transAxes)
-            ax_simple.set_title(f'Erro - {modelo}')
-            st.pyplot(fig_simple)
-            plt.close(fig_simple)
+            with criar_figura(figsize=(6, 4)) as (fig_simple, ax_simple):
+                ax_simple.text(0.5, 0.5, f'Erro nos resíduos\ndo modelo {modelo}',
+                               ha='center', va='center', transform=ax_simple.transAxes)
+                ax_simple.set_title(f'Erro - {modelo}')
+                st.pyplot(fig_simple)
+                # Figure será fechada automaticamente
         except:
             pass
 
@@ -328,7 +338,7 @@ def mostrar_equacao_modelo_volumetrico(modelo):
 
 def criar_grafico_obs_vs_pred_volumetrico(modelo, y_obs, y_pred, cor_idx):
     """
-    Cria gráfico observado vs predito para modelo volumétrico
+    Cria gráfico observado vs predito para modelo volumétrico - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         modelo: Nome do modelo
@@ -336,31 +346,32 @@ def criar_grafico_obs_vs_pred_volumetrico(modelo, y_obs, y_pred, cor_idx):
         y_pred: Valores preditos
         cor_idx: Índice da cor
     """
-    fig, ax = plt.subplots(figsize=(8, 6))
+    # CORREÇÃO: Usar context manager
+    with criar_figura(figsize=(8, 6)) as (fig, ax):
+        # Scatter plot
+        cor = CORES_MODELOS[cor_idx % len(CORES_MODELOS)]
+        ax.scatter(y_obs, y_pred, alpha=0.6, color=cor)
 
-    # Scatter plot
-    cor = CORES_MODELOS[cor_idx % len(CORES_MODELOS)]
-    ax.scatter(y_obs, y_pred, alpha=0.6, color=cor)
+        # Linha 1:1
+        min_val = min(y_obs.min(), y_pred.min())
+        max_val = max(y_obs.max(), y_pred.max())
+        ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='1:1')
 
-    # Linha 1:1
-    min_val = min(y_obs.min(), y_pred.min())
-    max_val = max(y_obs.max(), y_pred.max())
-    ax.plot([min_val, max_val], [min_val, max_val], 'r--', linewidth=2, label='1:1')
+        # Configurações
+        r2 = 1 - np.sum((y_obs - y_pred) ** 2) / np.sum((y_obs - np.mean(y_obs)) ** 2)
+        ax.set_title(f'{modelo} (R² = {r2:.3f})')
+        ax.set_xlabel('Volume Observado (m³)')
+        ax.set_ylabel('Volume Predito (m³)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
 
-    # Configurações
-    r2 = 1 - np.sum((y_obs - y_pred) ** 2) / np.sum((y_obs - np.mean(y_obs)) ** 2)
-    ax.set_title(f'{modelo} (R² = {r2:.3f})')
-    ax.set_xlabel('Volume Observado (m³)')
-    ax.set_ylabel('Volume Predito (m³)')
-    ax.legend()
-    ax.grid(True, alpha=0.3)
-
-    st.pyplot(fig)
+        st.pyplot(fig)
+        # Figure será fechada automaticamente
 
 
 def criar_graficos_residuos_volumetricos(modelo, y_obs, y_pred, cor_idx):
     """
-    Cria gráficos de resíduos para modelo volumétrico
+    Cria gráficos de resíduos para modelo volumétrico - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         modelo: Nome do modelo
@@ -399,26 +410,28 @@ def criar_graficos_residuos_volumetricos(modelo, y_obs, y_pred, cor_idx):
         col1_res, col2_res = st.columns(2)
 
         with col1_res:
-            # Resíduos vs Preditos
-            fig_res1, ax_res1 = plt.subplots(figsize=(6, 5))
-            ax_res1.scatter(y_pred_plot, residuos_plot, alpha=0.6, color=cor)
-            ax_res1.axhline(y=0, color='red', linestyle='--')
-            ax_res1.set_xlabel('Volumes Preditos (m³)')
-            ax_res1.set_ylabel('Resíduos (m³)')
-            ax_res1.set_title('Resíduos vs Preditos')
-            ax_res1.grid(True, alpha=0.3)
-            st.pyplot(fig_res1)
+            # CORREÇÃO: Resíduos vs Preditos com context manager
+            with criar_figura(figsize=(6, 5)) as (fig_res1, ax_res1):
+                ax_res1.scatter(y_pred_plot, residuos_plot, alpha=0.6, color=cor)
+                ax_res1.axhline(y=0, color='red', linestyle='--')
+                ax_res1.set_xlabel('Volumes Preditos (m³)')
+                ax_res1.set_ylabel('Resíduos (m³)')
+                ax_res1.set_title('Resíduos vs Preditos')
+                ax_res1.grid(True, alpha=0.3)
+                st.pyplot(fig_res1)
+                # Figure será fechada automaticamente
 
         with col2_res:
-            # Histograma dos resíduos
-            fig_res2, ax_res2 = plt.subplots(figsize=(6, 5))
-            ax_res2.hist(residuos_plot, bins=15, alpha=0.7, color=cor, edgecolor='black')
-            ax_res2.axvline(x=0, color='red', linestyle='--')
-            ax_res2.set_xlabel('Resíduos (m³)')
-            ax_res2.set_ylabel('Frequência')
-            ax_res2.set_title('Distribuição dos Resíduos')
-            ax_res2.grid(True, alpha=0.3)
-            st.pyplot(fig_res2)
+            # CORREÇÃO: Histograma dos resíduos com context manager
+            with criar_figura(figsize=(6, 5)) as (fig_res2, ax_res2):
+                ax_res2.hist(residuos_plot, bins=15, alpha=0.7, color=cor, edgecolor='black')
+                ax_res2.axvline(x=0, color='red', linestyle='--')
+                ax_res2.set_xlabel('Resíduos (m³)')
+                ax_res2.set_ylabel('Frequência')
+                ax_res2.set_title('Distribuição dos Resíduos')
+                ax_res2.grid(True, alpha=0.3)
+                st.pyplot(fig_res2)
+                # Figure será fechada automaticamente
 
     except Exception as e:
         st.error(f"❌ Erro ao criar gráficos de resíduos para {modelo}: {e}")
@@ -427,7 +440,7 @@ def criar_graficos_residuos_volumetricos(modelo, y_obs, y_pred, cor_idx):
 
 def criar_graficos_inventario(resultados):
     """
-    Cria gráficos específicos para o inventário final
+    Cria gráficos específicos para o inventário final - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         resultados: Resultados completos do inventário
@@ -466,7 +479,7 @@ def criar_graficos_inventario(resultados):
 
 def criar_grafico_distribuicao_produtividade(resumo_parcelas):
     """
-    Cria gráfico de distribuição da produtividade
+    Cria gráfico de distribuição da produtividade - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         resumo_parcelas: DataFrame com resumo por parcela
@@ -482,40 +495,40 @@ def criar_grafico_distribuicao_produtividade(resumo_parcelas):
 
     with col1:
         try:
-            # Histograma
-            fig, ax = plt.subplots(figsize=(8, 6))
-            vol_medio = resumo_parcelas['vol_ha'].mean()
+            # CORREÇÃO: Histograma com context manager
+            with criar_figura(figsize=(8, 6)) as (fig, ax):
+                vol_medio = resumo_parcelas['vol_ha'].mean()
 
-            ax.hist(resumo_parcelas['vol_ha'], bins=15, alpha=0.7, color='forestgreen', edgecolor='black')
-            ax.axvline(vol_medio, color='red', linestyle='--', linewidth=2,
-                       label=f'Média: {vol_medio:.1f} m³/ha')
-            ax.set_xlabel('Produtividade (m³/ha)')
-            ax.set_ylabel('Frequência')
-            ax.set_title('Distribuição de Produtividade')
-            ax.legend()
-            ax.grid(True, alpha=0.3)
-            st.pyplot(fig)
-            plt.close(fig)
+                ax.hist(resumo_parcelas['vol_ha'], bins=15, alpha=0.7, color='forestgreen', edgecolor='black')
+                ax.axvline(vol_medio, color='red', linestyle='--', linewidth=2,
+                           label=f'Média: {vol_medio:.1f} m³/ha')
+                ax.set_xlabel('Produtividade (m³/ha)')
+                ax.set_ylabel('Frequência')
+                ax.set_title('Distribuição de Produtividade')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+                # Figure será fechada automaticamente
         except Exception as e:
             st.error(f"Erro no histograma: {e}")
 
     with col2:
         try:
-            # Box plot
-            fig, ax = plt.subplots(figsize=(8, 6))
-            ax.boxplot(resumo_parcelas['vol_ha'], vert=True)
-            ax.set_ylabel('Produtividade (m³/ha)')
-            ax.set_title('Box Plot - Produtividade')
-            ax.grid(True, alpha=0.3)
-            st.pyplot(fig)
-            plt.close(fig)
+            # CORREÇÃO: Box plot com context manager
+            with criar_figura(figsize=(8, 6)) as (fig, ax):
+                ax.boxplot(resumo_parcelas['vol_ha'], vert=True)
+                ax.set_ylabel('Produtividade (m³/ha)')
+                ax.set_title('Box Plot - Produtividade')
+                ax.grid(True, alpha=0.3)
+                st.pyplot(fig)
+                # Figure será fechada automaticamente
         except Exception as e:
             st.error(f"Erro no box plot: {e}")
 
 
 def criar_grafico_produtividade_talhao(resumo_talhoes):
     """
-    Cria gráfico de produtividade por talhão
+    Cria gráfico de produtividade por talhão - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         resumo_talhoes: DataFrame com resumo por talhão
@@ -534,29 +547,29 @@ def criar_grafico_produtividade_talhao(resumo_talhoes):
     st.subheader("🌳 Produtividade por Talhão")
 
     try:
-        fig, ax = plt.subplots(figsize=(12, 6))
+        # CORREÇÃO: Gráfico de barras com context manager
+        with criar_figura(figsize=(12, 6)) as (fig, ax):
+            # Ordenar por produtividade
+            talhao_ordenado = resumo_talhoes.sort_values(col_volume, ascending=False)
 
-        # Ordenar por produtividade
-        talhao_ordenado = resumo_talhoes.sort_values(col_volume, ascending=False)
+            bars = ax.bar(range(len(talhao_ordenado)),
+                          talhao_ordenado[col_volume],
+                          color='steelblue', alpha=0.7)
 
-        bars = ax.bar(range(len(talhao_ordenado)),
-                      talhao_ordenado[col_volume],
-                      color='steelblue', alpha=0.7)
+            ax.set_xlabel('Talhão')
+            ax.set_ylabel('Produtividade (m³/ha)')
+            ax.set_title('Produtividade por Talhão')
+            ax.set_xticks(range(len(talhao_ordenado)))
+            ax.set_xticklabels([f'T{t}' for t in talhao_ordenado['talhao']])
+            ax.grid(True, alpha=0.3)
 
-        ax.set_xlabel('Talhão')
-        ax.set_ylabel('Produtividade (m³/ha)')
-        ax.set_title('Produtividade por Talhão')
-        ax.set_xticks(range(len(talhao_ordenado)))
-        ax.set_xticklabels([f'T{t}' for t in talhao_ordenado['talhao']])
-        ax.grid(True, alpha=0.3)
+            # Adicionar valores nas barras
+            for bar, val in zip(bars, talhao_ordenado[col_volume]):
+                ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
+                        f'{val:.0f}', ha='center', va='bottom')
 
-        # Adicionar valores nas barras
-        for bar, val in zip(bars, talhao_ordenado[col_volume]):
-            ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1,
-                    f'{val:.0f}', ha='center', va='bottom')
-
-        st.pyplot(fig)
-        plt.close(fig)
+            st.pyplot(fig)
+            # Figure será fechada automaticamente
 
     except Exception as e:
         st.error(f"Erro no gráfico por talhão: {e}")
@@ -564,7 +577,7 @@ def criar_grafico_produtividade_talhao(resumo_talhoes):
 
 def criar_graficos_correlacoes(resumo_parcelas):
     """
-    Cria gráficos de correlações entre variáveis
+    Cria gráficos de correlações entre variáveis - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         resumo_parcelas: DataFrame com resumo por parcela
@@ -589,78 +602,94 @@ def criar_graficos_correlacoes(resumo_parcelas):
         # Determinar o layout baseado no número de gráficos possíveis
         n_graficos = min(4, len(colunas_disponiveis) * (len(colunas_disponiveis) - 1) // 2)
 
+        # CORREÇÃO: Usar context manager para subplot
         if n_graficos >= 4:
-            fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-            axes = axes.flatten()
+            with criar_figura(figsize=(12, 10)) as (fig, axes):
+                axes = axes.flatten() if hasattr(axes, 'flatten') else [axes]
+                criar_subplots_correlacao(resumo_parcelas, colunas_disponiveis, axes)
+                plt.tight_layout()
+                st.pyplot(fig)
         elif n_graficos >= 2:
-            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
-            if n_graficos == 2:
-                axes = [axes[0], axes[1]]
-            else:
-                axes = axes.flatten()
+            with criar_figura(figsize=(12, 5)) as (fig, axes):
+                if n_graficos == 2:
+                    axes = [axes[0], axes[1]] if hasattr(axes, '__len__') else [axes]
+                else:
+                    axes = axes.flatten() if hasattr(axes, 'flatten') else [axes]
+                criar_subplots_correlacao(resumo_parcelas, colunas_disponiveis, axes)
+                plt.tight_layout()
+                st.pyplot(fig)
         else:
-            fig, ax = plt.subplots(1, 1, figsize=(6, 5))
-            axes = [ax]
-
-        idx = 0
-        cores = ['forestgreen', 'steelblue', 'orange', 'purple']
-
-        # Gráfico 1: Produtividade vs DAP (se ambos disponíveis)
-        if 'vol_ha' in colunas_disponiveis and 'dap_medio' in colunas_disponiveis and idx < len(axes):
-            axes[idx].scatter(resumo_parcelas['dap_medio'], resumo_parcelas['vol_ha'],
-                              alpha=0.6, color=cores[idx % len(cores)])
-            axes[idx].set_xlabel(colunas_disponiveis['dap_medio'])
-            axes[idx].set_ylabel(colunas_disponiveis['vol_ha'])
-            axes[idx].set_title('Produtividade vs DAP')
-            axes[idx].grid(True, alpha=0.3)
-            idx += 1
-
-        # Gráfico 2: Produtividade vs Altura (se ambos disponíveis)
-        if 'vol_ha' in colunas_disponiveis and 'altura_media' in colunas_disponiveis and idx < len(axes):
-            axes[idx].scatter(resumo_parcelas['altura_media'], resumo_parcelas['vol_ha'],
-                              alpha=0.6, color=cores[idx % len(cores)])
-            axes[idx].set_xlabel(colunas_disponiveis['altura_media'])
-            axes[idx].set_ylabel(colunas_disponiveis['vol_ha'])
-            axes[idx].set_title('Produtividade vs Altura')
-            axes[idx].grid(True, alpha=0.3)
-            idx += 1
-
-        # Gráfico 3: Produtividade vs Idade (se ambos disponíveis)
-        if 'vol_ha' in colunas_disponiveis and 'idade_anos' in colunas_disponiveis and idx < len(axes):
-            axes[idx].scatter(resumo_parcelas['idade_anos'], resumo_parcelas['vol_ha'],
-                              alpha=0.6, color=cores[idx % len(cores)])
-            axes[idx].set_xlabel(colunas_disponiveis['idade_anos'])
-            axes[idx].set_ylabel(colunas_disponiveis['vol_ha'])
-            axes[idx].set_title('Produtividade vs Idade')
-            axes[idx].grid(True, alpha=0.3)
-            idx += 1
-
-        # Gráfico 4: DAP vs Altura (se ambos disponíveis)
-        if 'dap_medio' in colunas_disponiveis and 'altura_media' in colunas_disponiveis and idx < len(axes):
-            axes[idx].scatter(resumo_parcelas['dap_medio'], resumo_parcelas['altura_media'],
-                              alpha=0.6, color=cores[idx % len(cores)])
-            axes[idx].set_xlabel(colunas_disponiveis['dap_medio'])
-            axes[idx].set_ylabel(colunas_disponiveis['altura_media'])
-            axes[idx].set_title('DAP vs Altura')
-            axes[idx].grid(True, alpha=0.3)
-            idx += 1
-
-        # Esconder eixos não utilizados
-        for i in range(idx, len(axes)):
-            axes[i].set_visible(False)
-
-        plt.tight_layout()
-        st.pyplot(fig)
-        plt.close(fig)
+            with criar_figura(figsize=(6, 5)) as (fig, ax):
+                axes = [ax]
+                criar_subplots_correlacao(resumo_parcelas, colunas_disponiveis, axes)
+                st.pyplot(fig)
+        # Figure será fechada automaticamente pelo context manager
 
     except Exception as e:
         st.error(f"Erro nos gráficos de correlação: {e}")
         st.info(f"Colunas disponíveis: {list(colunas_disponiveis.keys())}")
 
 
+def criar_subplots_correlacao(resumo_parcelas, colunas_disponiveis, axes):
+    """
+    Função auxiliar para criar subplots de correlação
+
+    Args:
+        resumo_parcelas: DataFrame com dados
+        colunas_disponiveis: Dict com colunas disponíveis
+        axes: Lista de axes do matplotlib
+    """
+    idx = 0
+    cores = ['forestgreen', 'steelblue', 'orange', 'purple']
+
+    # Gráfico 1: Produtividade vs DAP (se ambos disponíveis)
+    if 'vol_ha' in colunas_disponiveis and 'dap_medio' in colunas_disponiveis and idx < len(axes):
+        axes[idx].scatter(resumo_parcelas['dap_medio'], resumo_parcelas['vol_ha'],
+                          alpha=0.6, color=cores[idx % len(cores)])
+        axes[idx].set_xlabel(colunas_disponiveis['dap_medio'])
+        axes[idx].set_ylabel(colunas_disponiveis['vol_ha'])
+        axes[idx].set_title('Produtividade vs DAP')
+        axes[idx].grid(True, alpha=0.3)
+        idx += 1
+
+    # Gráfico 2: Produtividade vs Altura (se ambos disponíveis)
+    if 'vol_ha' in colunas_disponiveis and 'altura_media' in colunas_disponiveis and idx < len(axes):
+        axes[idx].scatter(resumo_parcelas['altura_media'], resumo_parcelas['vol_ha'],
+                          alpha=0.6, color=cores[idx % len(cores)])
+        axes[idx].set_xlabel(colunas_disponiveis['altura_media'])
+        axes[idx].set_ylabel(colunas_disponiveis['vol_ha'])
+        axes[idx].set_title('Produtividade vs Altura')
+        axes[idx].grid(True, alpha=0.3)
+        idx += 1
+
+    # Gráfico 3: Produtividade vs Idade (se ambos disponíveis)
+    if 'vol_ha' in colunas_disponiveis and 'idade_anos' in colunas_disponiveis and idx < len(axes):
+        axes[idx].scatter(resumo_parcelas['idade_anos'], resumo_parcelas['vol_ha'],
+                          alpha=0.6, color=cores[idx % len(cores)])
+        axes[idx].set_xlabel(colunas_disponiveis['idade_anos'])
+        axes[idx].set_ylabel(colunas_disponiveis['vol_ha'])
+        axes[idx].set_title('Produtividade vs Idade')
+        axes[idx].grid(True, alpha=0.3)
+        idx += 1
+
+    # Gráfico 4: DAP vs Altura (se ambos disponíveis)
+    if 'dap_medio' in colunas_disponiveis and 'altura_media' in colunas_disponiveis and idx < len(axes):
+        axes[idx].scatter(resumo_parcelas['dap_medio'], resumo_parcelas['altura_media'],
+                          alpha=0.6, color=cores[idx % len(cores)])
+        axes[idx].set_xlabel(colunas_disponiveis['dap_medio'])
+        axes[idx].set_ylabel(colunas_disponiveis['altura_media'])
+        axes[idx].set_title('DAP vs Altura')
+        axes[idx].grid(True, alpha=0.3)
+        idx += 1
+
+    # Esconder eixos não utilizados
+    for i in range(idx, len(axes)):
+        axes[i].set_visible(False)
+
+
 def criar_grafico_classificacao_produtividade(stats):
     """
-    Cria gráfico pizza da classificação de produtividade
+    Cria gráfico pizza da classificação de produtividade - COM CORREÇÃO DE MEMÓRIA
 
     Args:
         stats: Estatísticas gerais do inventário
@@ -678,26 +707,26 @@ def criar_grafico_classificacao_produtividade(stats):
         sizes = [stats['classe_alta'], stats['classe_media'], stats['classe_baixa']]
         colors = ['#2e8b57', '#ffa500', '#dc143c']  # Verde, laranja, vermelho
 
-        fig, ax = plt.subplots(figsize=(8, 8))
-        wedges, texts, autotexts = ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%',
-                                          startangle=90, textprops={'fontsize': 12})
+        # CORREÇÃO: Usar context manager para gráfico pizza
+        with criar_figura(figsize=(8, 8)) as (fig, ax):
+            wedges, texts, autotexts = ax.pie(sizes, labels=labels, colors=colors, autopct='%1.1f%%',
+                                              startangle=90, textprops={'fontsize': 12})
 
-        ax.set_title('Distribuição das Classes de Produtividade', fontsize=14, fontweight='bold')
+            ax.set_title('Distribuição das Classes de Produtividade', fontsize=14, fontweight='bold')
 
-        # Adicionar legenda com detalhes
-        q25 = stats.get('q25_volume', 80.0)
-        q75 = stats.get('q75_volume', 120.0)
+            # Adicionar legenda com detalhes
+            q25 = stats.get('q25_volume', 80.0)
+            q75 = stats.get('q75_volume', 120.0)
 
-        legend_labels = [
-            f'Alta (≥{q75:.1f} m³/ha): {stats["classe_alta"]} parcelas',
-            f'Média ({q25:.1f}-{q75:.1f} m³/ha): {stats["classe_media"]} parcelas',
-            f'Baixa (<{q25:.1f} m³/ha): {stats["classe_baixa"]} parcelas'
-        ]
+            legend_labels = [
+                f'Alta (≥{q75:.1f} m³/ha): {stats["classe_alta"]} parcelas',
+                f'Média ({q25:.1f}-{q75:.1f} m³/ha): {stats["classe_media"]} parcelas',
+                f'Baixa (<{q25:.1f} m³/ha): {stats["classe_baixa"]} parcelas'
+            ]
 
-        ax.legend(wedges, legend_labels, title="Classes", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
-
-        st.pyplot(fig)
-        plt.close(fig)
+            ax.legend(wedges, legend_labels, title="Classes", loc="center left", bbox_to_anchor=(1, 0, 0.5, 1))
+            st.pyplot(fig)
+            # Figure será fechada automaticamente
 
     except Exception as e:
         st.error(f"Erro no gráfico de classificação: {e}")
@@ -717,9 +746,26 @@ def configurar_estilo_matplotlib():
         'legend.fontsize': 9,
         'figure.titlesize': 14,
         'axes.grid': True,
-        'grid.alpha': 0.3
+        'grid.alpha': 0.3,
+        'figure.max_open_warning': 5  # CORREÇÃO: Reduzir limite de figuras abertas
     })
 
 
-# Configurar estilo ao importar o módulo
+def limpar_cache_matplotlib():
+    """
+    NOVA FUNÇÃO: Limpa cache de matplotlib para liberar memória
+    """
+    try:
+        plt.close('all')  # Fecha todas as figuras abertas
+        plt.clf()         # Limpa figura atual
+        plt.cla()         # Limpa axes atual
+    except:
+        pass
+
+
+# CORREÇÃO: Configurar estilo ao importar o módulo
 configurar_estilo_matplotlib()
+
+# CORREÇÃO: Adicionar hook para limpeza automática
+import atexit
+atexit.register(limpar_cache_matplotlib)

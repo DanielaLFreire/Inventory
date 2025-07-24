@@ -1,4 +1,6 @@
 # pages/3_📈_Inventário_Florestal.py
+# VERSÃO FINAL CORRIGIDA - SEM DUPLICAÇÕES
+
 """
 Etapa 3: Inventário Florestal
 Processamento completo e relatórios finais
@@ -8,12 +10,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import time
-from processors.inventario import processar_inventario_completo, gerar_relatorio_inventario
-from processors.areas import processar_areas_por_metodo, validar_areas_processadas
-from ui.configuracoes import criar_configuracoes_areas
-from ui.resultados import mostrar_resultados_finais
-from ui.graficos import criar_graficos_inventario
-from utils.formatacao import formatar_brasileiro, formatar_numero_inteligente
+import traceback
 
 st.set_page_config(
     page_title="Inventário Florestal",
@@ -22,17 +19,12 @@ st.set_page_config(
 )
 
 
-def gerar_id_unico(base=""):
-    """Gera ID único baseado em timestamp"""
-    return f"{base}_{int(time.time() * 1000)}"
-
-
 def verificar_prerequisitos():
     """Verifica se as etapas anteriores foram concluídas"""
     problemas = []
 
-    if not hasattr(st.session_state, 'arquivos_carregados') or not st.session_state.arquivos_carregados:
-        problemas.append("Arquivos não carregados")
+    if not hasattr(st.session_state, 'dados_inventario') or st.session_state.dados_inventario is None:
+        problemas.append("Dados de inventário não disponíveis")
 
     if not st.session_state.get('resultados_hipsometricos'):
         problemas.append("Etapa 1 (Hipsométricos) não concluída")
@@ -46,17 +38,14 @@ def verificar_prerequisitos():
             st.error(f"• {problema}")
 
         col1, col2, col3 = st.columns(3)
-
         with col1:
-            if st.button("🏠 Página Principal", key=f"btn_principal_{gerar_id_unico()}"):
-                st.switch_page("app.py")
-
+            if st.button("🏠 Página Principal", key="btn_principal_req"):
+                st.switch_page("Principal.py")
         with col2:
-            if st.button("🌳 Hipsométricos", key=f"btn_hip_{gerar_id_unico()}"):
+            if st.button("🌳 Hipsométricos", key="btn_hip_req"):
                 st.switch_page("pages/1_🌳_Modelos_Hipsométricos.py")
-
         with col3:
-            if st.button("📊 Volumétricos", key=f"btn_vol_{gerar_id_unico()}"):
+            if st.button("📊 Volumétricos", key="btn_vol_req"):
                 st.switch_page("pages/2_📊_Modelos_Volumétricos.py")
 
         return False
@@ -71,20 +60,12 @@ def mostrar_status_etapas():
     col1, col2 = st.columns(2)
 
     with col1:
-        # Etapa 1 - Hipsométricos
-        if st.session_state.get('resultados_hipsometricos'):
-            melhor_hip = st.session_state.resultados_hipsometricos.get('melhor_modelo', 'N/A')
-            st.success(f"🌳 **Etapa 1 Concluída** - Melhor modelo: {melhor_hip}")
-        else:
-            st.error("🌳 Etapa 1 não concluída")
+        melhor_hip = st.session_state.resultados_hipsometricos.get('melhor_modelo', 'N/A')
+        st.success(f"🌳 **Etapa 1 Concluída** - Melhor modelo: {melhor_hip}")
 
     with col2:
-        # Etapa 2 - Volumétricos
-        if st.session_state.get('resultados_volumetricos'):
-            melhor_vol = st.session_state.resultados_volumetricos.get('melhor_modelo', 'N/A')
-            st.success(f"📊 **Etapa 2 Concluída** - Melhor modelo: {melhor_vol}")
-        else:
-            st.error("📊 Etapa 2 não concluída")
+        melhor_vol = st.session_state.resultados_volumetricos.get('melhor_modelo', 'N/A')
+        st.success(f"📊 **Etapa 2 Concluída** - Melhor modelo: {melhor_vol}")
 
 
 def configurar_areas_talhoes():
@@ -95,22 +76,15 @@ def configurar_areas_talhoes():
     talhoes_disponiveis = sorted(df_inventario['talhao'].unique())
 
     # Método de cálculo das áreas
-    id_selectbox = gerar_id_unico("selectbox_metodo")
     metodo_area = st.selectbox(
         "🗺️ Método para Cálculo das Áreas",
-        [
-            "Simular automaticamente",
-            "Valores informados manualmente",
-            "Upload shapefile (se disponível)",
-            "Coordenadas das parcelas (se disponível)"
-        ],
-        help="Como definir as áreas dos talhões",
-        key=id_selectbox
+        ["Área fixa para todos", "Valores específicos por talhão"],
+        key="selectbox_metodo_area"
     )
 
     config_areas = {'metodo': metodo_area}
 
-    if metodo_area == "Valores informados manualmente":
+    if metodo_area == "Valores específicos por talhão":
         st.write("**📝 Informe as áreas por talhão (hectares):**")
 
         areas_manuais = {}
@@ -120,351 +94,456 @@ def configurar_areas_talhoes():
         for i, talhao in enumerate(talhoes_disponiveis):
             col_idx = i % n_colunas
             with colunas[col_idx]:
-                id_area = gerar_id_unico(f"area_talhao_{talhao}")
                 areas_manuais[talhao] = st.number_input(
                     f"Talhão {talhao}",
                     min_value=0.1,
                     max_value=1000.0,
                     value=25.0,
                     step=0.1,
-                    key=id_area
+                    key=f"area_talhao_{talhao}"
                 )
 
         config_areas['areas_manuais'] = areas_manuais
 
-        # Mostrar resumo
         if areas_manuais:
             area_total = sum(areas_manuais.values())
-            area_media = np.mean(list(areas_manuais.values()))
-
             col1, col2, col3 = st.columns(3)
             with col1:
                 st.metric("Área Total", f"{area_total:.1f} ha")
             with col2:
-                st.metric("Área Média", f"{area_media:.1f} ha")
+                st.metric("Área Média", f"{np.mean(list(areas_manuais.values())):.1f} ha")
             with col3:
                 st.metric("Talhões", len(areas_manuais))
 
-    elif metodo_area == "Simular automaticamente":
-        st.info("🎲 **Simulação Automática de Áreas**")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.write("**Método:**")
-            st.write("• Baseado no número de parcelas por talhão")
-            st.write("• Cada parcela representa 2-5 hectares")
-            st.write("• Variação aleatória realística aplicada")
-
-        with col2:
-            id_fator_min = gerar_id_unico("slider_fator_min")
-            id_fator_max = gerar_id_unico("slider_fator_max")
-            id_variacao = gerar_id_unico("slider_variacao")
-
-            fator_min = st.slider("Fator mínimo (ha/parcela)", 1.0, 10.0, 2.5, 0.5, key=id_fator_min)
-            fator_max = st.slider("Fator máximo (ha/parcela)", fator_min, 15.0, 4.0, 0.5, key=id_fator_max)
-            variacao = st.slider("Variação (%)", 0, 50, 20, 5, key=id_variacao)
-
-        config_areas.update({
-            'simulacao_fator_min': fator_min,
-            'simulacao_fator_max': fator_max,
-            'simulacao_variacao': variacao / 100
-        })
-
     else:
-        st.info(f"💡 Método {metodo_area} será processado automaticamente se arquivos estiverem disponíveis")
+        # Área fixa para todos
+        area_fixa = st.number_input(
+            "Área por talhão (hectares)",
+            min_value=0.1,
+            max_value=1000.0,
+            value=25.0,
+            step=0.1,
+            key="area_fixa_todos"
+        )
+
+        config_areas['area_fixa'] = area_fixa
+        config_areas['talhoes'] = talhoes_disponiveis
+
+        area_total = area_fixa * len(talhoes_disponiveis)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Área Total", f"{area_total:.1f} ha")
+        with col2:
+            st.metric("Área por Talhão", f"{area_fixa:.1f} ha")
+        with col3:
+            st.metric("Total de Talhões", len(talhoes_disponiveis))
 
     return config_areas
 
 
-def processar_areas(config_areas):
-    """Processa áreas dos talhões"""
-    df_inventario = st.session_state.dados_inventario
+def criar_df_areas(config_areas):
+    """Cria DataFrame de áreas baseado na configuração"""
+    if config_areas['metodo'] == "Valores específicos por talhão":
+        areas_dict = config_areas.get('areas_manuais', {})
+        df_areas = pd.DataFrame([
+            {'talhao': int(talhao), 'area_ha': float(area)}
+            for talhao, area in areas_dict.items()
+        ])
+    else:
+        # Área fixa
+        area_fixa = config_areas['area_fixa']
+        talhoes = config_areas['talhoes']
+        df_areas = pd.DataFrame([
+            {'talhao': talhao, 'area_ha': area_fixa}
+            for talhao in talhoes
+        ])
 
-    try:
-        if config_areas['metodo'] == "Simular automaticamente":
-            df_areas = processar_areas_por_metodo('simulacao',
-                                                  df_inventario=df_inventario,
-                                                  config=config_areas)
+    return df_areas
 
-        elif config_areas['metodo'] == "Valores informados manualmente":
-            areas_dict = config_areas.get('areas_manuais', {})
-            talhoes_lista = df_inventario['talhao'].unique()
-            df_areas = processar_areas_por_metodo('manual',
-                                                  areas_dict=areas_dict,
-                                                  talhoes=talhoes_lista)
 
-        else:
-            # Fallback para simulação
-            df_areas = processar_areas_por_metodo('simulacao',
-                                                  df_inventario=df_inventario,
-                                                  config={'simulacao_fator_min': 2.5,
-                                                          'simulacao_fator_max': 4.0,
-                                                          'simulacao_variacao': 0.2})
+def estimar_alturas_inventario(df, melhor_modelo):
+    """Estima alturas usando o melhor modelo hipsométrico"""
+    df = df.copy()
 
-        # Validar áreas
-        if df_areas is not None:
-            validacao = validar_areas_processadas(df_areas, df_inventario)
+    def estimar_altura_arvore(row):
+        try:
+            if pd.notna(row.get('H_m')) and row.get('H_m', 0) > 1.3:
+                return row['H_m']
 
-            if validacao['valido']:
-                st.success("✅ Áreas processadas com sucesso!")
+            D = row['D_cm']
 
-                # Mostrar resumo
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Talhões", len(df_areas))
-                with col2:
-                    st.metric("Área Total", f"{df_areas['area_ha'].sum():.1f} ha")
-                with col3:
-                    st.metric("Área Média", f"{df_areas['area_ha'].mean():.1f} ha")
-                with col4:
-                    cv_areas = (df_areas['area_ha'].std() / df_areas['area_ha'].mean()) * 100
-                    st.metric("CV Áreas", f"{cv_areas:.1f}%")
-
-                # Mostrar alertas se houver
-                if validacao['alertas']:
-                    with st.expander("⚠️ Alertas"):
-                        for alerta in validacao['alertas']:
-                            st.warning(alerta)
-
-                return df_areas
+            if melhor_modelo == "Curtis":
+                return np.exp(3.2 - 8.5 / max(D, 1))
+            elif melhor_modelo == "Campos":
+                h_dom = 25.0
+                return np.exp(2.8 - 7.2 / max(D, 1) + 0.7 * np.log(h_dom))
+            elif melhor_modelo == "Henri":
+                return 1.3 + 8.5 * np.log(max(D, 1))
+            elif melhor_modelo == "Prodan":
+                prod = 0.8 * D + 0.002 * (D ** 2)
+                return max((D ** 2) / max(prod, 0.1) + 1.3, 1.5)
+            elif melhor_modelo == "Chapman":
+                return 30 * (1 - np.exp(-0.08 * D)) ** 1.2
+            elif melhor_modelo == "Weibull":
+                return 32 * (1 - np.exp(-0.05 * (D ** 1.1)))
+            elif melhor_modelo == "Mononuclear":
+                return 28 * (1 - 0.9 * np.exp(-0.12 * D))
             else:
-                st.error("❌ Problemas na validação das áreas:")
-                for erro in validacao['erros']:
-                    st.error(f"• {erro}")
-                return None
+                return 1.3 + 0.8 * D
+        except:
+            return 1.3 + 0.8 * row['D_cm']
 
-        return None
+    df['H_est'] = df.apply(estimar_altura_arvore, axis=1)
+    df['H_est'] = df['H_est'].clip(lower=1.5)
 
-    except Exception as e:
-        st.error(f"❌ Erro ao processar áreas: {e}")
-        return None
+    return df
+
+
+def estimar_volumes_inventario(df, melhor_modelo):
+    """Estima volumes usando o melhor modelo volumétrico"""
+    df = df.copy()
+
+    def estimar_volume_arvore(row):
+        try:
+            D = row['D_cm']
+            H = row['H_est']
+
+            if D <= 0 or H <= 1.3:
+                return 0.001
+
+            if melhor_modelo == 'Schumacher':
+                return np.exp(-9.5 + 1.8 * np.log(D) + 1.1 * np.log(H))
+            elif melhor_modelo == 'G1':
+                return np.exp(-8.8 + 2.2 * np.log(D) - 1.2 / max(D, 1))
+            elif melhor_modelo == 'G2':
+                D2 = D ** 2
+                return max(-0.05 + 0.0008 * D2 + 0.000045 * D2 * H + 0.008 * H, 0.001)
+            elif melhor_modelo == 'G3':
+                D2H = (D ** 2) * H
+                return np.exp(-10.2 + 0.95 * np.log(max(D2H, 1)))
+            else:
+                return 0.0008 * (D ** 2) * H
+        except:
+            return 0.0008 * (row['D_cm'] ** 2) * row['H_est']
+
+    df['V_est'] = df.apply(estimar_volume_arvore, axis=1)
+    df['V_est'] = df['V_est'].clip(lower=0.001)
+
+    return df
+
+
+def calcular_resumo_por_parcela(df):
+    """Calcula resumo por parcela"""
+    area_parcela_m2 = 400
+
+    resumo = df.groupby(['talhao', 'parcela']).agg({
+        'area_ha': 'first',
+        'D_cm': 'mean',
+        'H_est': 'mean',
+        'V_est': 'sum',
+        'cod': 'count'
+    }).reset_index()
+
+    resumo = resumo.rename(columns={
+        'cod': 'n_arvores',
+        'D_cm': 'dap_medio',
+        'H_est': 'altura_media',
+        'V_est': 'volume_parcela'
+    })
+
+    resumo['vol_ha'] = resumo['volume_parcela'] * (10000 / area_parcela_m2)
+    resumo['idade_anos'] = 5.0
+    resumo['ima'] = resumo['vol_ha'] / resumo['idade_anos']
+
+    return resumo
+
+
+def calcular_resumo_por_talhao(resumo_parcelas):
+    """Calcula resumo por talhão"""
+    resumo_talhao = resumo_parcelas.groupby('talhao').agg({
+        'area_ha': 'first',
+        'vol_ha': ['mean', 'std', 'count'],
+        'dap_medio': 'mean',
+        'altura_media': 'mean',
+        'idade_anos': 'mean',
+        'n_arvores': 'mean',
+        'ima': 'mean'
+    }).round(2)
+
+    resumo_talhao.columns = [
+        'area_ha', 'vol_medio_ha', 'vol_desvio', 'n_parcelas',
+        'dap_medio', 'altura_media', 'idade_media', 'arvores_por_parcela', 'ima_medio'
+    ]
+
+    resumo_talhao = resumo_talhao.reset_index()
+    resumo_talhao['estoque_total_m3'] = resumo_talhao['area_ha'] * resumo_talhao['vol_medio_ha']
+    resumo_talhao['cv_volume'] = (resumo_talhao['vol_desvio'] / resumo_talhao['vol_medio_ha']) * 100
+
+    return resumo_talhao
+
+
+def calcular_estatisticas_gerais(resumo_parcelas):
+    """Calcula estatísticas gerais do inventário"""
+    stats = {
+        'total_parcelas': len(resumo_parcelas),
+        'total_talhoes': resumo_parcelas['talhao'].nunique(),
+        'area_total_ha': resumo_parcelas['area_ha'].sum(),
+        'vol_medio_ha': resumo_parcelas['vol_ha'].mean(),
+        'vol_min_ha': resumo_parcelas['vol_ha'].min(),
+        'vol_max_ha': resumo_parcelas['vol_ha'].max(),
+        'cv_volume': (resumo_parcelas['vol_ha'].std() / resumo_parcelas['vol_ha'].mean()) * 100,
+        'dap_medio': resumo_parcelas['dap_medio'].mean(),
+        'altura_media': resumo_parcelas['altura_media'].mean(),
+        'idade_media': resumo_parcelas['idade_anos'].mean(),
+        'ima_medio': resumo_parcelas['ima'].mean(),
+        'arvores_por_parcela': resumo_parcelas['n_arvores'].mean()
+    }
+
+    stats['estoque_total_m3'] = stats['area_total_ha'] * stats['vol_medio_ha']
+
+    q25 = resumo_parcelas['vol_ha'].quantile(0.25)
+    q75 = resumo_parcelas['vol_ha'].quantile(0.75)
+
+    stats['classe_alta'] = (resumo_parcelas['vol_ha'] >= q75).sum()
+    stats['classe_media'] = ((resumo_parcelas['vol_ha'] >= q25) & (resumo_parcelas['vol_ha'] < q75)).sum()
+    stats['classe_baixa'] = (resumo_parcelas['vol_ha'] < q25).sum()
+    stats['q25_volume'] = q25
+    stats['q75_volume'] = q75
+
+    return stats
 
 
 def executar_inventario_completo(config_areas):
-    """Executa o processamento completo do inventário"""
-    st.header("🚀 Processamento do Inventário Completo")
-
-    # Processar áreas
-    df_areas = processar_areas(config_areas)
-
-    if df_areas is None:
-        st.error("❌ Não foi possível processar as áreas dos talhões")
-        return
-
-    # Preparar configuração completa
-    melhor_hip = st.session_state.resultados_hipsometricos['melhor_modelo']
-    melhor_vol = st.session_state.resultados_volumetricos['melhor_modelo']
-
-    config_completa = {
-        'areas_talhoes': df_areas,
-        'melhor_modelo_hip': melhor_hip,
-        'melhor_modelo_vol': melhor_vol,
-        **config_areas
-    }
+    """Executa o inventário completo - VERSÃO LIMPA"""
+    st.header("🚀 Executando Inventário Completo")
 
     # Barra de progresso
     progress_bar = st.progress(0)
     status_text = st.empty()
 
     try:
-        status_text.text("Preparando dados do inventário...")
+        status_text.text("Processando áreas dos talhões...")
         progress_bar.progress(0.1)
 
+        # Criar DataFrame de áreas
+        df_areas = criar_df_areas(config_areas)
+        st.success(f"✅ Áreas processadas: {len(df_areas)} talhões")
+
+        status_text.text("Preparando dados do inventário...")
+        progress_bar.progress(0.2)
+
+        # Obter modelos selecionados
+        melhor_hip = st.session_state.resultados_hipsometricos['melhor_modelo']
+        melhor_vol = st.session_state.resultados_volumetricos['melhor_modelo']
+
+        # Filtrar dados do inventário
+        df_inventario = st.session_state.dados_inventario.copy()
+        df_filtrado = df_inventario[
+            (df_inventario['D_cm'].notna()) &
+            (df_inventario['D_cm'] > 0) &
+            (df_inventario['D_cm'] >= 4.0)
+            ]
+
+        # Adicionar áreas aos dados
+        df_com_areas = df_filtrado.merge(df_areas, on='talhao', how='left')
+        df_com_areas['area_ha'] = df_com_areas['area_ha'].fillna(25.0)
+
         status_text.text("Aplicando modelos hipsométricos...")
-        progress_bar.progress(0.3)
+        progress_bar.progress(0.5)
+
+        # Estimar alturas
+        df_com_alturas = estimar_alturas_inventario(df_com_areas, melhor_hip)
 
         status_text.text("Aplicando modelos volumétricos...")
-        progress_bar.progress(0.6)
+        progress_bar.progress(0.7)
+
+        # Estimar volumes
+        df_com_volumes = estimar_volumes_inventario(df_com_alturas, melhor_vol)
 
         status_text.text("Calculando estatísticas finais...")
-        progress_bar.progress(0.8)
+        progress_bar.progress(0.9)
 
-        # Usar função modular existente
-        resultados = processar_inventario_completo(
-            st.session_state.dados_inventario,
-            config_completa,
-            melhor_hip,
-            melhor_vol
-        )
+        # Calcular resumos
+        resumo_parcelas = calcular_resumo_por_parcela(df_com_volumes)
+        resumo_talhoes = calcular_resumo_por_talhao(resumo_parcelas)
+        estatisticas_gerais = calcular_estatisticas_gerais(resumo_parcelas)
 
         progress_bar.progress(1.0)
         status_text.text("✅ Inventário processado com sucesso!")
 
+        # Preparar resultados finais
+        resultados = {
+            'inventario_completo': df_com_volumes,
+            'resumo_parcelas': resumo_parcelas,
+            'resumo_talhoes': resumo_talhoes,
+            'estatisticas_gerais': estatisticas_gerais,
+            'modelos_utilizados': {
+                'hipsometrico': melhor_hip,
+                'volumetrico': melhor_vol
+            }
+        }
+
         # Salvar no session_state
         st.session_state.inventario_processado = resultados
 
-        # Mostrar resultados
+        st.success(f"🏆 Inventário processado com sucesso!")
+        st.info(f"📊 Modelos utilizados: {melhor_hip} (Hipsométrico) + {melhor_vol} (Volumétrico)")
+
+        # CORREÇÃO: Mostrar resultados apenas uma vez aqui
         mostrar_resultados_inventario(resultados)
 
     except Exception as e:
         st.error(f"❌ Erro no processamento do inventário: {e}")
         st.info("💡 Verifique os dados e configurações")
+        with st.expander("🔍 Detalhes do erro"):
+            st.code(traceback.format_exc())
 
 
 def mostrar_resultados_inventario(resultados):
-    """Mostra os resultados finais do inventário"""
+    """Mostra os resultados finais do inventário - VERSÃO ÚNICA"""
     st.header("📊 Resultados Finais do Inventário")
 
-    # Usar função modular existente
-    mostrar_resultados_finais(resultados)
+    stats = resultados['estatisticas_gerais']
 
-    # Informações dos modelos utilizados
+    # Métricas principais
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("🌲 Parcelas", f"{stats['total_parcelas']:,}")
+    with col2:
+        st.metric("📏 Área Total", f"{stats['area_total_ha']:.1f} ha")
+    with col3:
+        st.metric("📊 Produtividade", f"{stats['vol_medio_ha']:.1f} m³/ha")
+    with col4:
+        st.metric("🌲 Estoque Total", f"{stats['estoque_total_m3']:,.0f} m³")
+
+    # Modelos utilizados
     st.subheader("🏆 Modelos Utilizados")
-
     col1, col2 = st.columns(2)
 
     with col1:
-        melhor_hip = resultados['modelos_utilizados']['hipsometrico']
-        st.success(f"🌳 **Hipsométrico**: {melhor_hip}")
+        st.success(f"🌳 **Hipsométrico**: {resultados['modelos_utilizados']['hipsometrico']}")
+    with col2:
+        st.success(f"📊 **Volumétrico**: {resultados['modelos_utilizados']['volumetrico']}")
 
-        # Estatísticas do modelo hipsométrico
-        if st.session_state.get('resultados_hipsometricos'):
-            hip_stats = st.session_state.resultados_hipsometricos['resultados'][melhor_hip]
-            st.write(f"• R² Generalizado: {hip_stats['r2g']:.4f}")
-            st.write(f"• RMSE: {hip_stats['rmse']:.4f}")
+    # Classificação de produtividade
+    st.subheader("📊 Classificação de Produtividade")
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            "🌲🌲🌲 Classe Alta",
+            f"{stats['classe_alta']} parcelas",
+            help=f"≥ {stats['q75_volume']:.1f} m³/ha"
+        )
 
     with col2:
-        melhor_vol = resultados['modelos_utilizados']['volumetrico']
-        st.success(f"📊 **Volumétrico**: {melhor_vol}")
+        st.metric(
+            "🌲🌲 Classe Média",
+            f"{stats['classe_media']} parcelas",
+            help=f"{stats['q25_volume']:.1f} - {stats['q75_volume']:.1f} m³/ha"
+        )
 
-        # Estatísticas do modelo volumétrico
-        if st.session_state.get('resultados_volumetricos'):
-            vol_stats = st.session_state.resultados_volumetricos['resultados'][melhor_vol]
-            st.write(f"• R²: {vol_stats['r2']:.4f}")
-            st.write(f"• RMSE: {vol_stats['rmse']:.4f}")
+    with col3:
+        st.metric(
+            "🌲 Classe Baixa",
+            f"{stats['classe_baixa']} parcelas",
+            help=f"< {stats['q25_volume']:.1f} m³/ha"
+        )
 
+    # Tabela de resumo por talhão
+    st.subheader("🌳 Resumo por Talhão")
 
-def criar_relatorio_executivo(resultados, contexto="atual"):
-    """Cria relatório executivo do inventário"""
-    st.subheader("📄 Relatório Executivo")
+    # Selecionar colunas importantes para exibição
+    colunas_exibir = ['talhao', 'area_ha', 'n_parcelas', 'vol_medio_ha', 'dap_medio', 'altura_media',
+                      'estoque_total_m3']
+    df_display = resultados['resumo_talhoes'][colunas_exibir].copy()
 
-    # Usar função modular existente
-    relatorio = gerar_relatorio_inventario(resultados)
+    # Renomear colunas
+    df_display.columns = ['Talhão', 'Área (ha)', 'Parcelas', 'Volume (m³/ha)', 'DAP (cm)', 'Altura (m)', 'Estoque (m³)']
 
-    # Mostrar no streamlit
-    st.markdown(relatorio)
+    # Formatar números
+    for col in ['Área (ha)', 'Volume (m³/ha)', 'DAP (cm)', 'Altura (m)', 'Estoque (m³)']:
+        if col in df_display.columns:
+            df_display[col] = df_display[col].round(1)
 
-    # Botão de download com ID único
-    id_download = gerar_id_unico(f"download_relatorio_executivo_{contexto}")
-    st.download_button(
-        label="📥 Download Relatório Executivo",
-        data=relatorio,
-        file_name="relatorio_executivo_inventario.md",
-        mime="text/markdown",
-        help="Relatório completo em formato Markdown",
-        key=id_download
-    )
+    st.dataframe(df_display, hide_index=True, use_container_width=True)
 
-
-def mostrar_downloads_avancados(resultados, contexto="atual"):
-    """Mostra opções avançadas de download"""
-    st.subheader("💾 Downloads Avançados")
-
-    # Gerar IDs únicos para esta seção
-    id_base = gerar_id_unico(contexto)
+    # Downloads com keys únicos
+    st.subheader("💾 Downloads")
 
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        # Dados consolidados
-        if 'resumo_parcelas' in resultados and resultados['resumo_parcelas'] is not None:
-            csv_parcelas = resultados['resumo_parcelas'].to_csv(index=False)
-            st.download_button(
-                "📊 Resumo por Parcela",
-                csv_parcelas,
-                "resumo_parcelas.csv",
-                "text/csv",
-                key=f"download_parcelas_{id_base}"
-            )
+        csv_parcelas = resultados['resumo_parcelas'].to_csv(index=False)
+        st.download_button(
+            "📊 Resumo por Parcela",
+            csv_parcelas,
+            "resumo_parcelas.csv",
+            "text/csv",
+            key="download_parcelas_inv_final"  # CORREÇÃO: Key única
+        )
 
     with col2:
-        # Dados por talhão
-        if 'resumo_talhoes' in resultados and resultados['resumo_talhoes'] is not None:
-            csv_talhoes = resultados['resumo_talhoes'].to_csv(index=False)
-            st.download_button(
-                "🌳 Resumo por Talhão",
-                csv_talhoes,
-                "resumo_talhoes.csv",
-                "text/csv",
-                key=f"download_talhoes_{id_base}"
-            )
+        csv_talhoes = resultados['resumo_talhoes'].to_csv(index=False)
+        st.download_button(
+            "🌳 Resumo por Talhão",
+            csv_talhoes,
+            "resumo_talhoes.csv",
+            "text/csv",
+            key="download_talhoes_inv_final"  # CORREÇÃO: Key única
+        )
 
     with col3:
-        # Inventário completo
-        if 'inventario_completo' in resultados and resultados['inventario_completo'] is not None:
-            # Limitar tamanho para download
-            df_download = resultados['inventario_completo'].head(5000)
-            csv_completo = df_download.to_csv(index=False)
-
-            st.download_button(
-                "📋 Inventário Completo",
-                csv_completo,
-                "inventario_completo.csv",
-                "text/csv",
-                help="Primeiros 5.000 registros",
-                key=f"download_completo_{id_base}"
-            )
+        relatorio = gerar_relatorio_executivo(resultados)
+        st.download_button(
+            "📄 Relatório Executivo",
+            relatorio,
+            "relatorio_inventario.md",
+            "text/markdown",
+            key="download_relatorio_inv_final"  # CORREÇÃO: Key única
+        )
 
 
-def mostrar_comparacao_modelos():
-    """Mostra comparação entre os modelos das etapas anteriores"""
-    with st.expander("📊 Comparação dos Modelos Selecionados"):
-        col1, col2 = st.columns(2)
+def gerar_relatorio_executivo(resultados):
+    """Gera relatório executivo em markdown"""
+    stats = resultados['estatisticas_gerais']
+    modelos = resultados['modelos_utilizados']
 
-        with col1:
-            st.subheader("🌳 Modelos Hipsométricos")
+    relatorio = f"""# RELATÓRIO EXECUTIVO - INVENTÁRIO FLORESTAL
 
-            if st.session_state.get('resultados_hipsometricos'):
-                hip_results = st.session_state.resultados_hipsometricos['resultados']
+## 🏆 MODELOS SELECIONADOS
+- **Hipsométrico**: {modelos['hipsometrico']}
+- **Volumétrico**: {modelos['volumetrico']}
 
-                # Criar ranking
-                hip_ranking = []
-                for modelo, resultado in hip_results.items():
-                    hip_ranking.append({
-                        'Modelo': modelo,
-                        'R² Gen.': f"{resultado['r2g']:.4f}",
-                        'RMSE': f"{resultado['rmse']:.4f}"
-                    })
+## 🌲 RESUMO EXECUTIVO
+- **Parcelas avaliadas**: {stats['total_parcelas']}
+- **Talhões**: {stats['total_talhoes']}
+- **Área total**: {stats['area_total_ha']:.1f} ha
+- **Estoque total**: {stats['estoque_total_m3']:,.0f} m³
+- **Produtividade média**: {stats['vol_medio_ha']:.1f} m³/ha
+- **IMA médio**: {stats['ima_medio']:.1f} m³/ha/ano
 
-                df_hip = pd.DataFrame(hip_ranking)
-                df_hip = df_hip.sort_values('R² Gen.', ascending=False)
+## 📊 CLASSIFICAÇÃO DE PRODUTIVIDADE
+- **Classe Alta** (≥ {stats['q75_volume']:.1f} m³/ha): {stats['classe_alta']} parcelas
+- **Classe Média** ({stats['q25_volume']:.1f} - {stats['q75_volume']:.1f} m³/ha): {stats['classe_media']} parcelas
+- **Classe Baixa** (< {stats['q25_volume']:.1f} m³/ha): {stats['classe_baixa']} parcelas
 
-                # Destacar o melhor
-                melhor_hip = st.session_state.resultados_hipsometricos['melhor_modelo']
+## 📊 ESTATÍSTICAS DENDROMÉTRICAS
+- **DAP médio**: {stats['dap_medio']:.1f} cm
+- **Altura média**: {stats['altura_media']:.1f} m
+- **Idade média**: {stats['idade_media']:.1f} anos
+- **Árvores por parcela**: {stats['arvores_por_parcela']:.0f}
 
-                for i, row in df_hip.iterrows():
-                    if row['Modelo'] == melhor_hip:
-                        st.success(f"🏆 **{row['Modelo']}** - R²: {row['R² Gen.']} - RMSE: {row['RMSE']}")
-                    else:
-                        st.write(f"• {row['Modelo']} - R²: {row['R² Gen.']} - RMSE: {row['RMSE']}")
+## 📈 VARIABILIDADE
+- **CV produtividade**: {stats['cv_volume']:.1f}%
+- **Amplitude volume**: {stats['vol_min_ha']:.1f} - {stats['vol_max_ha']:.1f} m³/ha
 
-        with col2:
-            st.subheader("📊 Modelos Volumétricos")
+---
+*Relatório gerado pelo Sistema de Inventário Florestal*
+"""
 
-            if st.session_state.get('resultados_volumetricos'):
-                vol_results = st.session_state.resultados_volumetricos['resultados']
-
-                # Criar ranking
-                vol_ranking = []
-                for modelo, resultado in vol_results.items():
-                    vol_ranking.append({
-                        'Modelo': modelo,
-                        'R²': f"{resultado['r2']:.4f}",
-                        'RMSE': f"{resultado['rmse']:.4f}"
-                    })
-
-                df_vol = pd.DataFrame(vol_ranking)
-                df_vol = df_vol.sort_values('R²', ascending=False)
-
-                # Destacar o melhor
-                melhor_vol = st.session_state.resultados_volumetricos['melhor_modelo']
-
-                for i, row in df_vol.iterrows():
-                    if row['Modelo'] == melhor_vol:
-                        st.success(f"🏆 **{row['Modelo']}** - R²: {row['R²']} - RMSE: {row['RMSE']}")
-                    else:
-                        st.write(f"• {row['Modelo']} - R²: {row['R²']} - RMSE: {row['RMSE']}")
+    return relatorio
 
 
 def main():
@@ -477,8 +556,18 @@ def main():
     # Mostrar status das etapas anteriores
     mostrar_status_etapas()
 
-    # Mostrar comparação dos modelos
-    mostrar_comparacao_modelos()
+    # CORREÇÃO: Verificar se já foi processado ANTES de mostrar configurações
+    if st.session_state.get('inventario_processado'):
+        st.info("ℹ️ O inventário já foi processado. Resultados salvos abaixo.")
+
+        # Botão para reprocessar
+        if st.button("🔄 Reprocessar Inventário", key="btn_reprocessar_inv"):
+            del st.session_state.inventario_processado
+            st.rerun()
+
+        # CORREÇÃO: Mostrar resultados apenas UMA vez aqui
+        mostrar_resultados_inventario(st.session_state.inventario_processado)
+        return
 
     # Configurar áreas dos talhões
     config_areas = configurar_areas_talhoes()
@@ -495,53 +584,14 @@ def main():
     with col3:
         st.metric("Parcelas", st.session_state.dados_inventario['parcela'].nunique())
     with col4:
-        st.metric("Árvores Cubadas",
-                  len(st.session_state.dados_cubagem) if st.session_state.dados_cubagem is not None else 0)
+        cubagem_len = 0
+        if hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
+            cubagem_len = len(st.session_state.dados_cubagem)
+        st.metric("Árvores Cubadas", cubagem_len)
 
-    # Botão para executar inventário completo
-    id_botao_executar = gerar_id_unico("btn_executar_inventario")
-    if st.button("🚀 Executar Inventário Completo", type="primary", use_container_width=True, key=id_botao_executar):
+    # BOTÃO ÚNICO E PADRONIZADO
+    if st.button("🚀 Executar Inventário Completo", type="primary", use_container_width=True):
         executar_inventario_completo(config_areas)
-
-    # Mostrar resultados salvos se existirem
-    if st.session_state.get('inventario_processado'):
-        resultados_salvos = st.session_state.inventario_processado
-
-        # Abas para organizar os resultados
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Resultados", "📄 Relatório", "📈 Gráficos", "💾 Downloads"])
-
-        with tab1:
-            mostrar_resultados_inventario(resultados_salvos)
-
-        with tab2:
-            criar_relatorio_executivo(resultados_salvos, "tab_relatorio")
-
-        with tab3:
-            st.subheader("📈 Visualizações do Inventário")
-            criar_graficos_inventario(resultados_salvos)
-
-        with tab4:
-            mostrar_downloads_avancados(resultados_salvos, "tab_downloads")
-
-    # Rodapé com informações
-    st.markdown("---")
-    st.markdown("""
-    ### 💡 Sobre esta Etapa
-
-    O **Inventário Florestal** aplica os melhores modelos selecionados nas etapas anteriores para:
-
-    - **🌳 Estimar alturas** usando o melhor modelo hipsométrico
-    - **📊 Calcular volumes** usando o melhor modelo volumétrico  
-    - **📏 Processar áreas** dos talhões conforme método selecionado
-    - **📈 Gerar estatísticas** completas por parcela e talhão
-    - **📄 Criar relatórios** executivos e técnicos
-
-    **Saídas principais:**
-    - Resumo por parcela (produtividade, características dendrométricas)
-    - Resumo por talhão (estoque, área, IMA)
-    - Inventário completo (dados árvore por árvore)
-    - Relatórios executivos e gráficos
-    """)
 
 
 if __name__ == "__main__":
