@@ -625,7 +625,7 @@ def executar_inventario_completo(config_areas, parametros):
 
         # Criar DataFrame de áreas
         df_areas = criar_df_areas(config_areas)
-        st.success(f"✅ Áreas processadas: {len(df_areas)} talhões")
+        #st.success(f"✅ Áreas processadas: {len(df_areas)} talhões")
 
         status_text.text("Preparando dados do inventário...")
         progress_bar.progress(0.2)
@@ -691,8 +691,8 @@ def executar_inventario_completo(config_areas, parametros):
         # Salvar no session_state
         st.session_state.inventario_processado = resultados
 
-        st.success(f"🏆 Inventário processado com sucesso!")
-        st.info(f"📊 Modelos utilizados: {melhor_hip} (Hipsométrico) + {melhor_vol} (Volumétrico)")
+        #st.success(f"🏆 Inventário processado com sucesso!")
+        #st.info(f"📊 Modelos utilizados: {melhor_hip} (Hipsométrico) + {melhor_vol} (Volumétrico)")
 
         # Mostrar resultados
         mostrar_resultados_inventario(resultados)
@@ -710,21 +710,52 @@ def mostrar_resultados_inventario(resultados):
 
     stats = resultados['estatisticas_gerais']
 
-    # Métricas principais melhoradas
+    # Métricas principais melhoradas com tooltips
     st.subheader("📈 Indicadores Principais")
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.metric("🌲 Parcelas", f"{stats['total_parcelas']:,}".replace(',', '.'))
+        st.metric("🌲 Parcelas", f"{stats['total_parcelas']:,}".replace(',', '.'),
+                  help="**Total de Parcelas** - Número de unidades amostrais medidas no inventário florestal")
     with col2:
-        st.metric("📏 Área Total", f"{formatar_brasileiro(stats['area_total_ha'], 1)} ha")
+        st.metric("📏 Área Total", f"{formatar_brasileiro(stats['area_total_ha'], 1)} ha",
+                  help="**Área Total** - Superfície total da floresta inventariada em hectares")
     with col3:
-        st.metric("📊 Produtividade", f"{formatar_brasileiro(stats['vol_medio_ha'], 1)} m³/ha")
+        st.metric("📊 Produtividade", f"{formatar_brasileiro(stats['vol_medio_ha'], 1)} m³/ha",
+                  help="**Volume por Hectare** - Volume médio de madeira por unidade de área")
     with col4:
-        st.metric("🌲 Estoque Total", formatar_numero_inteligente(stats['estoque_total_m3'], "m³"))
+        st.metric("🌲 Estoque Total", formatar_numero_inteligente(stats['estoque_total_m3'], "m³"),
+                  help="**Estoque Total** - Volume total de madeira em toda a floresta (Produtividade × Área Total)")
     with col5:
-        st.metric("🚀 IMA Médio", f"{formatar_brasileiro(stats['ima_vol_medio'], 1)} m³/ha/ano")
+        ima_col1, ima_col2 = st.columns([3, 1])
+        with ima_col1:
+            st.metric("🚀 IMA Médio", f"{formatar_brasileiro(stats['ima_vol_medio'], 1)} m³/ha/ano",
+                      help="**Incremento Médio Anual** - Crescimento médio anual em volume por hectare (Volume ÷ Idade)")
+        with ima_col2:
+            # Widget de ajuda para explicar o IMA
+            with st.popover("ℹ️"):
+                st.markdown("""
+                **📈 Incremento Médio Anual (IMA)**
+
+                Medida usada para indicar o crescimento médio anual em volume por hectare.
+
+                **🧮 Fórmula:**
+                ```
+                IMA = Volume (m³/ha) ÷ Idade (anos)
+                ```
+
+                **📊 Interpretação (Eucalipto):**
+                - **> 30 m³/ha/ano**: Alta produtividade
+                - **20-30 m³/ha/ano**: Média produtividade  
+                - **< 20 m³/ha/ano**: Baixa produtividade
+
+                **💡 Uso Prático:**
+                - Comparar diferentes talhões
+                - Avaliar qualidade do sítio
+                - Planejar rotação de corte
+                - Calcular viabilidade econômica
+                """, unsafe_allow_html=True)
 
     # Modelos utilizados
     st.subheader("🏆 Modelos Utilizados")
@@ -778,22 +809,26 @@ def mostrar_aba_resumo_geral(stats):
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("📏 DAP Médio", f"{formatar_brasileiro(stats['dap_medio'], 1)} cm")
+        st.metric("📏 DAP Médio", f"{formatar_brasileiro(stats['dap_medio'], 1)} cm",
+                  help="**Diâmetro à Altura do Peito** - Diâmetro médio do tronco medido a 1,30m do solo")
         st.caption(
             f"Amplitude: {formatar_brasileiro(stats['dap_min'], 1)} - {formatar_brasileiro(stats['dap_max'], 1)} cm")
 
     with col2:
-        st.metric("🌳 Altura Média", f"{formatar_brasileiro(stats['altura_media'], 1)} m")
+        st.metric("🌳 Altura Média", f"{formatar_brasileiro(stats['altura_media'], 1)} m",
+                  help="**Altura Total** - Altura média das árvores do solo até o topo da copa")
         st.caption(
             f"Amplitude: {formatar_brasileiro(stats['altura_min'], 1)} - {formatar_brasileiro(stats['altura_max'], 1)} m")
 
     with col3:
-        st.metric("📊 CV Volume", f"{formatar_brasileiro(stats['cv_volume'], 1)}%")
+        st.metric("📊 CV Volume", f"{formatar_brasileiro(stats['cv_volume'], 1)}%",
+                  help="**Coeficiente de Variação** - Medida da variabilidade dos volumes entre parcelas (Desvio Padrão/Média × 100)")
         cv_qualif = "Baixo" if stats['cv_volume'] < 20 else "Médio" if stats['cv_volume'] < 40 else "Alto"
         st.caption(f"Variabilidade: {cv_qualif}")
 
     with col4:
-        st.metric("📅 Idade Média", f"{formatar_brasileiro(stats['idade_media'], 1)} anos")
+        st.metric("📅 Idade Média", f"{formatar_brasileiro(stats['idade_media'], 1)} anos",
+                  help="**Idade do Povoamento** - Tempo decorrido desde o plantio até a data da medição")
 
     # Classificação de produtividade
     st.subheader("📊 Classificação de Produtividade")
@@ -803,21 +838,21 @@ def mostrar_aba_resumo_geral(stats):
         st.metric(
             "🌲🌲🌲 Classe Alta",
             f"{stats['classe_alta']} parcelas",
-            help=f"≥ {formatar_brasileiro(stats['q75_volume'], 1)} m³/ha"
+            help=f"**Parcelas de Alta Produtividade** - Parcelas com volume ≥ {formatar_brasileiro(stats['q75_volume'], 1)} m³/ha (75º percentil)"
         )
 
     with col2:
         st.metric(
             "🌲🌲 Classe Média",
             f"{stats['classe_media']} parcelas",
-            help=f"{formatar_brasileiro(stats['q25_volume'], 1)} - {formatar_brasileiro(stats['q75_volume'], 1)} m³/ha"
+            help=f"**Parcelas de Produtividade Média** - Parcelas com volume entre {formatar_brasileiro(stats['q25_volume'], 1)} e {formatar_brasileiro(stats['q75_volume'], 1)} m³/ha"
         )
 
     with col3:
         st.metric(
             "🌲 Classe Baixa",
             f"{stats['classe_baixa']} parcelas",
-            help=f"< {formatar_brasileiro(stats['q25_volume'], 1)} m³/ha"
+            help=f"**Parcelas de Baixa Produtividade** - Parcelas com volume < {formatar_brasileiro(stats['q25_volume'], 1)} m³/ha (25º percentil)"
         )
 
     # Métricas comerciais e ambientais
@@ -825,33 +860,44 @@ def mostrar_aba_resumo_geral(stats):
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("📦 Volume Comercial", f"{formatar_brasileiro(stats['vol_comercial_medio_ha'], 1)} m³/ha")
-        st.metric("📦 Estoque Comercial", formatar_numero_inteligente(stats['estoque_comercial_total_m3'], "m³"))
+        st.metric("📦 Volume Comercial", f"{formatar_brasileiro(stats['vol_comercial_medio_ha'], 1)} m³/ha",
+                  help="**Volume Comercial** - Volume de madeira aproveitável comercialmente (≈85% do volume total)")
+        st.metric("📦 Estoque Comercial", formatar_numero_inteligente(stats['estoque_comercial_total_m3'], "m³"),
+                  help="**Estoque Comercial Total** - Volume comercial total de toda a área (Volume Comercial × Área Total)")
 
     with col2:
-        st.metric("🌿 Biomassa Total", formatar_numero_inteligente(stats['biomassa_total_ton'], "ton"))
-        st.metric("🌱 Carbono Estocado", formatar_numero_inteligente(stats['carbono_estimado_ton'], "ton CO₂"))
+        st.metric("🌿 Biomassa Total", formatar_numero_inteligente(stats['biomassa_total_ton'], "ton"),
+                  help="**Biomassa Seca** - Peso da madeira seca total considerando densidade e fator de forma")
+        st.metric("🌱 Carbono Estocado", formatar_numero_inteligente(stats['carbono_estimado_ton'], "ton CO₂"),
+                  help="**Carbono Sequestrado** - Quantidade de CO₂ retirado da atmosfera e estocado na madeira (≈47% da biomassa)")
 
     with col3:
-        st.metric("🏗️ Área Basal Média", f"{formatar_brasileiro(stats['area_basal_media_ha'], 1)} m²/ha")
-        st.metric("🌲 Densidade Média", f"{formatar_brasileiro(stats['densidade_media_ha'], 0)} árv/ha")
+        st.metric("🏗️ Área Basal Média", f"{formatar_brasileiro(stats['area_basal_media_ha'], 1)} m²/ha",
+                  help="**Área Basal** - Soma das áreas seccionais de todas as árvores por hectare (indica ocupação do terreno)")
+        st.metric("🌲 Densidade Média", f"{formatar_brasileiro(stats['densidade_media_ha'], 0)} árv/ha",
+                  help="**Densidade Atual** - Número de árvores vivas por hectare")
 
     with col4:
-        st.metric("📈 Mortalidade", f"{formatar_brasileiro(stats['mortalidade_media'], 1)}%")
-        st.metric("🎯 Índice de Sítio", f"{formatar_brasileiro(stats['indice_sitio_medio'], 2)}")
+        st.metric("📈 Mortalidade", f"{formatar_brasileiro(stats['mortalidade_media'], 1)}%",
+                  help="**Taxa de Mortalidade** - Percentual de árvores mortas desde o plantio")
+        st.metric("🎯 Índice de Sítio", f"{formatar_brasileiro(stats['indice_sitio_medio'], 2)}",
+                  help="**Qualidade do Sítio** - Capacidade produtiva do local (Altura Dominante/Idade)")
 
     # Projeções futuras
     st.subheader("🔮 Projeções de Colheita")
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("📊 Volume Final Estimado", f"{formatar_brasileiro(stats['volume_final_estimado_ha'], 1)} m³/ha")
+        st.metric("📊 Volume Final Estimado", f"{formatar_brasileiro(stats['volume_final_estimado_ha'], 1)} m³/ha",
+                  help="**Volume na Colheita** - Volume estimado ao final do ciclo de rotação (7 anos para eucalipto)")
     with col2:
-        st.metric("🌲 Potencial de Colheita", formatar_numero_inteligente(stats['potencial_colheita_m3'], "m³"))
+        st.metric("🌲 Potencial de Colheita", formatar_numero_inteligente(stats['potencial_colheita_m3'], "m³"),
+                  help="**Potencial Total de Colheita** - Volume total estimado para colheita em toda a área")
     with col3:
         ciclo_otimo = 7  # Assumindo ciclo típico de eucalipto
         anos_restantes = max(0, ciclo_otimo - stats['idade_media'])
-        st.metric("⏰ Anos até Colheita", f"{formatar_brasileiro(anos_restantes, 1)} anos")
+        st.metric("⏰ Anos até Colheita", f"{formatar_brasileiro(anos_restantes, 1)} anos",
+                  help="**Tempo para Colheita** - Anos restantes até atingir a idade ótima de corte (7 anos)")
 
 
 def mostrar_aba_talhao(resultados):
@@ -978,11 +1024,14 @@ def mostrar_aba_crescimento_ima(stats, resultados):
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("🌟 IMA Excelente", f"{stats['ima_excelente']} parcelas", "≥ 25 m³/ha/ano")
+        st.metric("🌟 IMA Excelente", f"{stats['ima_excelente']} parcelas",
+                  help="**IMA Excelente** - Parcelas com Incremento Médio Anual ≥ 25 m³/ha/ano (alta produtividade)")
     with col2:
-        st.metric("📊 IMA Bom", f"{stats['ima_bom']} parcelas", "15-25 m³/ha/ano")
+        st.metric("📊 IMA Bom", f"{stats['ima_bom']} parcelas",
+                  help="**IMA Bom** - Parcelas com IMA entre 15-25 m³/ha/ano (produtividade média-alta)")
     with col3:
-        st.metric("📉 IMA Regular", f"{stats['ima_regular']} parcelas", "< 15 m³/ha/ano")
+        st.metric("📉 IMA Regular", f"{stats['ima_regular']} parcelas",
+                  help="**IMA Regular** - Parcelas com IMA < 15 m³/ha/ano (produtividade baixa)")
 
     # Gráficos de crescimento
     st.subheader("📊 Gráficos de Crescimento")
@@ -1021,18 +1070,23 @@ def mostrar_aba_crescimento_ima(stats, resultados):
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("📊 IMA Volume", f"{formatar_brasileiro(stats['ima_vol_medio'], 2)} m³/ha/ano")
-        st.metric("📈 IMA Área Basal", f"{formatar_brasileiro(stats['ima_area_basal_medio'], 2)} m²/ha/ano")
+        st.metric("📊 IMA Volume", f"{formatar_brasileiro(stats['ima_vol_medio'], 2)} m³/ha/ano",
+                  help="**Incremento Médio Anual Volumétrico** - Crescimento médio anual em volume por hectare")
+        st.metric("📈 IMA Área Basal", f"{formatar_brasileiro(stats['ima_area_basal_medio'], 2)} m²/ha/ano",
+                  help="**IMA de Área Basal** - Crescimento médio anual da área basal por hectare")
 
     with col2:
-        st.metric("🌿 IMA Biomassa", f"{formatar_brasileiro(stats['ima_biomassa_medio'], 0)} kg/ha/ano")
-        st.metric("🎯 Índice de Sítio", f"{formatar_brasileiro(stats['indice_sitio_medio'], 2)}")
+        st.metric("🌿 IMA Biomassa", f"{formatar_numero_inteligente(stats['ima_biomassa_medio'], 'kg/ha/ano')}",
+                  help="**IMA de Biomassa** - Crescimento médio anual da biomassa seca por hectare")
+        st.metric("🎯 Índice de Sítio", f"{formatar_brasileiro(stats['indice_sitio_medio'], 2)}",
+                  help="**Índice de Sítio** - Indicador da qualidade do local para crescimento florestal (altura/idade)")
 
     with col3:
         # Projeção de crescimento
         crescimento_anual = stats['ima_vol_medio']
         volume_5_anos = stats['vol_medio_ha'] + (crescimento_anual * 2)  # +2 anos
-        st.metric("📊 Volume em 2 anos", f"{formatar_brasileiro(volume_5_anos, 1)} m³/ha")
+        st.metric("📊 Volume em 2 anos", f"{formatar_brasileiro(volume_5_anos, 1)} m³/ha",
+                  help="**Projeção de Volume** - Volume estimado daqui a 2 anos baseado no IMA atual")
         st.caption("Projeção baseada no IMA atual")
 
 
@@ -1044,16 +1098,21 @@ def mostrar_aba_estrutura_densidade(stats, resultados):
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
-        st.metric("🌲 Densidade Atual", f"{formatar_brasileiro(stats['densidade_media_ha'], 0)} árv/ha")
+        st.metric("🌲 Densidade Atual", f"{formatar_brasileiro(stats['densidade_media_ha'], 0)} árv/ha",
+                  help="**Densidade Atual** - Número de árvores vivas por hectare no momento da medição")
     with col2:
         densidade_inicial = resultados['parametros_utilizados'].get('densidade_plantio', 1667)
-        st.metric("🌱 Densidade Inicial", f"{formatar_brasileiro(densidade_inicial, 0)} árv/ha")
+        st.metric("🌱 Densidade Inicial", f"{formatar_brasileiro(densidade_inicial, 0)} árv/ha",
+                  help="**Densidade de Plantio** - Número de mudas plantadas inicialmente por hectare")
     with col3:
-        st.metric("📉 Mortalidade", f"{formatar_brasileiro(stats['mortalidade_media'], 1)}%")
+        st.metric("📉 Mortalidade", f"{formatar_brasileiro(stats['mortalidade_media'], 1)}%",
+                  help="**Taxa de Mortalidade** - Percentual de árvores que morreram desde o plantio")
     with col4:
         sobrevivencia = 100 - stats['mortalidade_media']
-        st.metric("✅ Sobrevivência", f"{formatar_brasileiro(sobrevivencia, 1)}%")
-        st.metric("✅ Sobrevivência", f"{sobrevivencia:.1f}%")
+        st.metric("✅ Sobrevivência", f"{formatar_brasileiro(sobrevivencia, 1)}%",
+                  help="**Taxa de Sobrevivência** - Percentual de árvores que permaneceram vivas desde o plantio")
+
+        #st.metric("✅ Sobrevivência", f"{sobrevivencia:.1f}%")
 
     # Distribuição diamétrica
     df_completo = resultados['inventario_completo']
@@ -1101,19 +1160,24 @@ def mostrar_aba_estrutura_densidade(stats, resultados):
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        st.metric("🌿 Biomassa Total", formatar_numero_inteligente(stats['biomassa_total_ton'], "ton"))
+        st.metric("🌿 Biomassa Total", formatar_numero_inteligente(stats['biomassa_total_ton'], "ton"),
+                  help="**Biomassa Seca Total** - Peso total da madeira seca de toda a floresta")
         st.metric("🌱 Biomassa por Hectare",
-                  f"{formatar_brasileiro(stats['biomassa_total_ton'] / stats['area_total_ha'], 1)} ton/ha")
+                  f"{formatar_brasileiro(stats['biomassa_total_ton'] / stats['area_total_ha'], 1)} ton/ha",
+                  help="**Biomassa por Hectare** - Peso médio da madeira seca por unidade de área")
 
     with col2:
-        st.metric("🌱 Carbono Estocado", formatar_numero_inteligente(stats['carbono_estimado_ton'], "ton CO₂"))
+        st.metric("🌱 Carbono Estocado", formatar_numero_inteligente(stats['carbono_estimado_ton'], "ton CO₂"),
+                  help="**Carbono Sequestrado** - CO₂ retirado da atmosfera e fixado na madeira (≈47% da biomassa)")
         carbono_ha = stats['carbono_estimado_ton'] / stats['area_total_ha']
-        st.metric("🌱 Carbono por Hectare", f"{formatar_brasileiro(carbono_ha, 1)} ton CO₂/ha")
+        st.metric("🌱 Carbono por Hectare", f"{formatar_brasileiro(carbono_ha, 1)} ton CO₂/ha",
+                  help="**Sequestro de Carbono por Hectare** - Quantidade de CO₂ sequestrado por unidade de área")
 
     with col3:
         # Equivalente em carros retirados de circulação (assumindo 4.6 ton CO₂/ano por carro)
         carros_equivalente = stats['carbono_estimado_ton'] / 4.6
-        st.metric("🚗 Equivalente em Carros", f"{formatar_numero_inteligente(carros_equivalente, 'carros/ano')}")
+        st.metric("🚗 Equivalente em Carros", f"{formatar_numero_inteligente(carros_equivalente, 'carros/ano')}",
+                  help="**Impacto Ambiental** - Número de carros que precisariam ser retirados de circulação por 1 ano para ter o mesmo efeito ambiental")
         st.caption("Emissão média anual por veículo")
 
 
