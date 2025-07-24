@@ -5,14 +5,14 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="0933ff58-d44a-4d20-9ba5-872577b7c28e" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/Inventory.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/profiles_settings.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/app.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/app1.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/1__Modelos_Hipsométricos.py" afterPathEscaped="$PROJECT_DIR$/pages/1_🌳_Modelos_Hipsométricos.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/2__Modelos_Volumétricos.py" afterPathEscaped="$PROJECT_DIR$/pages/2_📊_Modelos_Volumétricos.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/pages/3__Inventário_Florestal.py" afterPathEscaped="$PROJECT_DIR$/pages/3_📈_Inventário_Florestal.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/principal.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ui/sidebarold.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ui/sidebar.py" beforeDir="false" afterPath="$PROJECT_DIR$/ui/sidebar.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -27,12 +27,23 @@
     </option>
   </component>
   <component name="Git.Settings">
+    <option name="PREVIOUS_COMMIT_AUTHORS">
+      <list>
+        <option value="DanielaLFreire &lt;danielalopesfreire@gmail.com&gt;" />
+      </list>
+    </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {}
+}]]></component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 3
 }</component>
   <component name="ProjectId" id="30EIFwkRs9vdnHofGjgJvIWphTS" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
@@ -41,8 +52,14 @@
   "keyToString": {
     "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.1_🌳_Modelos_Hipsométricos.executor": "Run",
+    "Python.2_📊_Modelos_Volumétricos.executor": "Run",
+    "Python.3_📈_Inventário_Florestal.executor": "Run",
     "Python._pydev_execfile.executor": "Run",
     "Python.app.executor": "Debug",
+    "Python.principal.executor": "Run",
+    "Python.principal1.executor": "Run",
+    "Python.sidebar.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
@@ -71,6 +88,19 @@
       <option name="presentableId" value="Default" />
       <updated>1753186206084</updated>
     </task>
+    <task id="LOCAL-00001" summary="Melhoria">
+      <option name="closed" value="true" />
+      <created>1753329678985</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1753329678985</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Melhoria" />
+    <option name="LAST_COMMIT_MESSAGE" value="Melhoria" />
   </component>
 </project>
