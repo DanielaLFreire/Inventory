@@ -250,7 +250,7 @@ def configurar_parametros_avancados():
             )
 
             densidade_madeira = st.number_input(
-                "🪵 Densidade da Madeira (kg/m³)",
+                "🌱 Densidade da Madeira (kg/m³)",
                 min_value=300,
                 max_value=800,
                 value=500,
@@ -1053,7 +1053,6 @@ def mostrar_aba_estrutura_densidade(stats, resultados):
     with col4:
         sobrevivencia = 100 - stats['mortalidade_media']
         st.metric("✅ Sobrevivência", f"{formatar_brasileiro(sobrevivencia, 1)}%")
-        ']
         st.metric("✅ Sobrevivência", f"{sobrevivencia:.1f}%")
 
     # Distribuição diamétrica
