@@ -31,7 +31,7 @@ def verificar_dados():
     if not hasattr(st.session_state, 'arquivos_carregados') or not st.session_state.arquivos_carregados:
         st.error("❌ Dados não carregados. Volte à página principal.")
         if st.button("🏠 Voltar à Página Principal", key="btn_voltar_hip"):
-            st.switch_page("app.py")
+            st.switch_page("Principal.py")
         return False
     return True
 
