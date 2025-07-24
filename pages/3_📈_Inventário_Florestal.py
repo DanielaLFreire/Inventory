@@ -83,10 +83,20 @@ def configurar_areas_talhoes():
     df_inventario = st.session_state.dados_inventario
     talhoes_disponiveis = sorted(df_inventario['talhao'].unique())
 
+    # CORREÇÃO: Verificar se arquivos opcionais foram carregados
+    metodos_disponiveis = ["Área fixa para todos", "Valores específicos por talhão", "Simulação baseada em parcelas"]
+
+    # NOVO: Adicionar métodos se arquivos estão disponíveis
+    if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
+        metodos_disponiveis.append("Upload shapefile")
+
+    if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
+        metodos_disponiveis.append("Coordenadas das parcelas")
+
     # Método de cálculo das áreas
     metodo_area = st.selectbox(
         "🗺️ Método para Cálculo das Áreas",
-        ["Área fixa para todos", "Valores específicos por talhão", "Simulação baseada em parcelas"],
+        metodos_disponiveis,  # CORREÇÃO: Usar lista dinâmica
         key="selectbox_metodo_area"
     )
 
@@ -169,6 +179,32 @@ def configurar_areas_talhoes():
             st.metric("Talhões", len(areas_simuladas))
 
         config_areas['areas_simuladas'] = areas_simuladas
+    # NOVO: Adicionar processamento para shapefile e coordenadas
+    elif metodo_area == "Upload shapefile":
+        st.success("📁 Shapefile será processado automaticamente")
+        st.info("✅ Áreas serão extraídas da geometria dos polígonos")
+        config_areas['usar_shapefile'] = True
+
+    elif metodo_area == "Coordenadas das parcelas":
+        st.success("📍 Coordenadas serão processadas automaticamente")
+
+        # Configurar raio da parcela
+        col1, col2 = st.columns(2)
+        with col1:
+            raio_parcela = st.number_input(
+                "📐 Raio da Parcela (m)",
+                min_value=5.0,
+                max_value=30.0,
+                value=11.28,
+                step=0.1,
+                help="Raio para calcular área circular (11.28m = 400m²)"
+            )
+        with col2:
+            area_calculada = np.pi * (raio_parcela ** 2)
+            st.metric("Área da Parcela", f"{area_calculada:.0f} m²")
+
+        config_areas['raio_parcela'] = raio_parcela
+        config_areas['usar_coordenadas'] = True
 
     else:
         # Área fixa para todos
@@ -270,28 +306,37 @@ def configurar_parametros_avancados():
 
 def criar_df_areas(config_areas):
     """Cria DataFrame de áreas baseado na configuração"""
-    if config_areas['metodo'] == "Valores específicos por talhão":
+    # IMPORTAR funções dos módulos especializados
+    from processors.areas import processar_areas_por_metodo
+
+    metodo = config_areas['metodo']
+
+    if metodo == "Upload shapefile":
+        return processar_areas_por_metodo('shapefile', arquivo_shp=st.session_state.arquivo_shapefile)
+
+    elif metodo == "Coordenadas das parcelas":
+        raio_parcela = config_areas.get('raio_parcela', 11.28)
+        return processar_areas_por_metodo('coordenadas',
+                                          arquivo_coord=st.session_state.arquivo_coordenadas,
+                                          raio_parcela=raio_parcela)
+
+    elif metodo == "Valores específicos por talhão":
         areas_dict = config_areas.get('areas_manuais', {})
-        df_areas = pd.DataFrame([
-            {'talhao': int(talhao), 'area_ha': float(area)}
-            for talhao, area in areas_dict.items()
-        ])
-    elif config_areas['metodo'] == "Simulação baseada em parcelas":
-        areas_dict = config_areas.get('areas_simuladas', {})
-        df_areas = pd.DataFrame([
-            {'talhao': int(talhao), 'area_ha': float(area)}
-            for talhao, area in areas_dict.items()
-        ])
-    else:
-        # Área fixa
+        talhoes = list(areas_dict.keys())
+        return processar_areas_por_metodo('manual', areas_dict=areas_dict, talhoes=talhoes)
+
+    elif metodo == "Simulação baseada em parcelas":
+        df_inventario = st.session_state.dados_inventario
+        return processar_areas_por_metodo('simulacao', df_inventario=df_inventario, config=config_areas)
+
+    else:  # Área fixa
         area_fixa = config_areas['area_fixa']
         talhoes = config_areas['talhoes']
         df_areas = pd.DataFrame([
             {'talhao': talhao, 'area_ha': area_fixa}
             for talhao in talhoes
         ])
-
-    return df_areas
+        return df_areas
 
 
 def estimar_alturas_inventario(df, melhor_modelo):

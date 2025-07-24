@@ -56,6 +56,16 @@ def processar_uploads(arquivos):
             if arquivos_processados:
                 st.session_state.arquivos_carregados = True
 
+    # NOVO: Armazenar arquivos opcionais no session_state
+    st.session_state.arquivo_shapefile = arquivos.get('shapefile')
+    st.session_state.arquivo_coordenadas = arquivos.get('coordenadas')
+
+    # Mostrar status dos arquivos opcionais
+    if arquivos.get('shapefile'):
+        st.sidebar.info(f"📁 Shapefile: {arquivos['shapefile'].name}")
+    if arquivos.get('coordenadas'):
+        st.sidebar.info(f"📍 Coordenadas: {arquivos['coordenadas'].name}")
+
     return st.session_state.arquivos_carregados
 
 
