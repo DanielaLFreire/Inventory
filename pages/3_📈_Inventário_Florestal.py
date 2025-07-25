@@ -1,8 +1,7 @@
-# pages/3_📈_Inventário_Florestal.py - VERSÃO INTEGRADA COM CONFIGURAÇÕES CENTRALIZADAS
+# pages/3_📈_Inventário_Florestal.py - VERSÃO FINAL COMPLETA E LIMPA
 """
 Etapa 3: Inventário Florestal
-Processamento completo e relatórios finais com configurações centralizadas
-CORRIGIDO: Integração total com configurações globais, keys únicas, interface melhorada
+Processamento completo e relatórios finais com configurações centralizadas e definições completas
 """
 
 import streamlit as st
@@ -12,7 +11,7 @@ import matplotlib.pyplot as plt
 import time
 import traceback
 
-# NOVO: Importar configurações centralizadas
+# Importar configurações centralizadas
 from config.configuracoes_globais import (
     obter_configuracao_global,
     aplicar_filtros_configuracao_global,
@@ -46,7 +45,6 @@ def verificar_prerequisitos():
     if not hasattr(st.session_state, 'dados_inventario') or st.session_state.dados_inventario is None:
         problemas.append("Dados de inventário não disponíveis")
 
-    # NOVO: Verificar configuração global
     config_global = obter_configuracao_global()
     if not config_global.get('configurado', False):
         problemas.append("Sistema não configurado")
@@ -113,7 +111,6 @@ def mostrar_configuracao_aplicada_inventario():
             st.write(f"• Densidade plantio: {config.get('densidade_plantio', 1667)} árv/ha")
             st.write(f"• Fator forma: {config.get('fator_forma', 0.5)}")
 
-    # Botão para ajustar configurações
     if st.button("🔧 Ajustar Configurações", key="btn_ajustar_config_inv"):
         st.switch_page("pages/0_⚙️_Configurações.py")
 
@@ -136,20 +133,13 @@ def mostrar_status_etapas():
 
 
 def configurar_areas_talhoes():
-    """
-    NOVO: Configura áreas usando configurações centralizadas
-    Substitui a configuração manual pela centralizada
-    """
+    """Configura áreas usando configurações centralizadas"""
     st.header("📏 Configuração de Áreas dos Talhões")
 
-    # Obter configuração global
     config = obter_configuracao_global()
-
-    # Mostrar método atual das configurações
     metodo_atual = config.get('metodo_area', 'Simular automaticamente')
     st.info(f"🗺️ **Método das configurações globais**: {metodo_atual}")
 
-    # Verificar se configurações estão adequadas
     if metodo_atual == "Simular automaticamente":
         st.warning("""
         ⚠️ **Método automático selecionado**
@@ -159,7 +149,6 @@ def configurar_areas_talhoes():
         ajuste nas Configurações Globais (Etapa 0).
         """)
 
-        # Permitir override rápido
         with st.expander("🔧 Override Rápido (Opcional)"):
             col1, col2 = st.columns(2)
 
@@ -180,13 +169,11 @@ def configurar_areas_talhoes():
     else:
         st.success(f"✅ **Configuração encontrada**: {metodo_atual}")
 
-        # Mostrar detalhes baseado no método
         if metodo_atual == "Valores específicos por talhão":
             areas_manuais = config.get('areas_manuais', {})
             if areas_manuais:
                 st.success(f"📝 Áreas manuais configuradas para {len(areas_manuais)} talhões")
 
-                # Preview das áreas
                 with st.expander("👀 Preview das Áreas Configuradas"):
                     df_preview = pd.DataFrame([
                         {'Talhão': talhao, 'Área (ha)': area}
@@ -208,16 +195,12 @@ def configurar_areas_talhoes():
             else:
                 st.warning("⚠️ Shapefile não encontrado")
 
-    # Retornar configuração para usar
     return {'usar_global': True}
 
 
 def criar_df_areas_centralizado(config_areas):
-    """
-    NOVO: Cria DataFrame de áreas usando configurações centralizadas
-    """
+    """Cria DataFrame de áreas usando configurações centralizadas"""
     try:
-        # Se há override, usar área personalizada
         if config_areas.get('override'):
             st.info("🔧 Usando override de área personalizada")
 
@@ -233,7 +216,6 @@ def criar_df_areas_centralizado(config_areas):
             st.success(f"✅ Override aplicado: {area_fixa} ha para {len(df_areas)} talhões")
             return df_areas
 
-        # Usar configurações globais
         config_global = obter_configuracao_global()
         metodo = config_global.get('metodo_area', 'Simular automaticamente')
 
@@ -246,7 +228,7 @@ def criar_df_areas_centralizado(config_areas):
                 df_areas = pd.DataFrame([
                     {'talhao': int(talhao), 'area_ha': float(area)}
                     for talhao, area in areas_manuais.items()
-                    if talhao in talhoes_disponiveis  # Só incluir talhões que existem
+                    if talhao in talhoes_disponiveis
                 ])
 
                 if len(df_areas) > 0:
@@ -256,14 +238,11 @@ def criar_df_areas_centralizado(config_areas):
         elif metodo == "Coordenadas das parcelas":
             if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas:
                 try:
-                    # Processar coordenadas usando função utilitária
                     raio_parcela = config_global.get('raio_parcela', 11.28)
-
-                    # Simulação simples - na prática usaria função específica
-                    area_parcela_ha = (np.pi * raio_parcela ** 2) / 10000  # m² para ha
+                    area_parcela_ha = (np.pi * raio_parcela ** 2) / 10000
 
                     df_areas = pd.DataFrame([
-                        {'talhao': talhao, 'area_ha': area_parcela_ha * 60}  # Assumindo ~60 parcelas/talhão
+                        {'talhao': talhao, 'area_ha': area_parcela_ha * 60}
                         for talhao in talhoes_disponiveis
                     ])
 
@@ -276,7 +255,6 @@ def criar_df_areas_centralizado(config_areas):
         elif metodo == "Upload shapefile":
             if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile:
                 try:
-                    # Simulação - na prática usaria biblioteca de GIS
                     np.random.seed(42)
                     areas_aleatorias = np.random.uniform(20, 35, len(talhoes_disponiveis))
 
@@ -291,9 +269,9 @@ def criar_df_areas_centralizado(config_areas):
                 except Exception as e:
                     st.warning(f"⚠️ Erro ao processar shapefile: {e}")
 
-        # FALLBACK: Usar área padrão das configurações ou 25.0 ha
-        area_padrao = config_global.get('area_parcela', 400) / 16  # ~25 ha (400m² * 100 parcelas / 1600)
-        if area_padrao < 5:  # Se muito pequeno, usar 25 ha
+        # FALLBACK: Usar área padrão
+        area_padrao = config_global.get('area_parcela', 400) / 16
+        if area_padrao < 5:
             area_padrao = 25.0
 
         df_areas = pd.DataFrame([
@@ -325,9 +303,7 @@ def criar_df_areas_centralizado(config_areas):
 
 
 def obter_parametros_configuracao():
-    """
-    NOVO: Obtém parâmetros das configurações centralizadas
-    """
+    """Obtém parâmetros das configurações centralizadas"""
     config = obter_configuracao_global()
 
     return {
@@ -628,8 +604,6 @@ def executar_inventario_completo(config_areas, parametros):
         st.subheader("3️⃣ Aplicando Filtros ao Inventário")
 
         df_inventario = st.session_state.dados_inventario.copy()
-
-        # NOVO: Usar filtros das configurações centralizadas
         df_filtrado = aplicar_filtros_configuracao_global(df_inventario)
 
         if len(df_filtrado) == 0:
@@ -647,7 +621,6 @@ def executar_inventario_completo(config_areas, parametros):
         st.write(f"**Talhões no inventário filtrado:** {sorted(talhoes_inventario)}")
         st.write(f"**Talhões com áreas:** {sorted(talhoes_areas)}")
 
-        # Verificar compatibilidade
         talhoes_comuns = talhoes_inventario & talhoes_areas
         talhoes_sem_area = talhoes_inventario - talhoes_areas
 
@@ -664,14 +637,10 @@ def executar_inventario_completo(config_areas, parametros):
         # 5. FAZER MERGE
         st.subheader("5️⃣ Combinando Dados")
 
-        # Garantir tipos compatíveis
         df_filtrado['talhao'] = df_filtrado['talhao'].astype(int)
         df_areas['talhao'] = df_areas['talhao'].astype(int)
 
-        # Merge com left join
         df_com_areas = df_filtrado.merge(df_areas, on='talhao', how='left')
-
-        # Preencher áreas faltantes
         df_com_areas['area_ha'] = df_com_areas['area_ha'].fillna(25.0)
 
         st.success(f"✅ Merge concluído: {len(df_com_areas)} registros")
@@ -699,7 +668,7 @@ def executar_inventario_completo(config_areas, parametros):
         resumo_talhoes = calcular_resumo_por_talhao(resumo_parcelas)
         estatisticas_gerais = calcular_estatisticas_gerais(resumo_parcelas, resumo_talhoes)
 
-        # NOVO: Salvar configurações aplicadas nos resultados
+        # Salvar configurações aplicadas nos resultados
         config_aplicada = obter_configuracao_global()
 
         # Salvar resultados
@@ -714,7 +683,7 @@ def executar_inventario_completo(config_areas, parametros):
             },
             'parametros_utilizados': parametros,
             'areas_utilizadas': df_areas,
-            'config_aplicada': config_aplicada,  # NOVO: Salvar configuração aplicada
+            'config_aplicada': config_aplicada,
             'timestamp': pd.Timestamp.now()
         }
 
@@ -729,27 +698,157 @@ def executar_inventario_completo(config_areas, parametros):
             st.code(traceback.format_exc())
 
 
-def mostrar_resultados_inventario(resultados):
-    """Mostra os resultados finais do inventário com formatação brasileira"""
-    st.header("📊 Resultados Finais do Inventário")
-
-    stats = resultados['estatisticas_gerais']
-
-    # Métricas principais
-    st.subheader("📈 Indicadores Principais")
+def mostrar_metricas_principais_com_definicoes(stats):
+    """Mostra as métricas principais com definições completas"""
+    st.header("📊 RESULTADOS FINAIS")
 
     col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.metric("🌲 Parcelas", f"{stats['total_parcelas']:,}".replace(',', '.'))
+        st.metric("🌲 Parcelas", f"{stats['total_parcelas']:,}".replace(',', '.'),
+                  help="**Total de Parcelas** - Número de unidades amostrais medidas no inventário florestal. Cada parcela representa uma área pequena (ex: 400m²) onde todas as árvores são medidas para estimar o povoamento total.")
+
     with col2:
-        st.metric("📏 Área Total", f"{formatar_brasileiro(stats['area_total_ha'], 1)} ha")
+        st.metric("📏 Área Total", f"{formatar_brasileiro(stats['area_total_ha'], 1)} ha",
+                  help="**Área Total** - Superfície total da floresta inventariada em hectares (1 ha = 10.000 m²). Representa a extensão completa do povoamento florestal avaliado.")
+
     with col3:
-        st.metric("📊 Produtividade", f"{formatar_brasileiro(stats['vol_medio_ha'], 1)} m³/ha")
+        st.metric("📊 Produtividade", f"{formatar_brasileiro(stats['vol_medio_ha'], 1)} m³/ha",
+                  help="**Volume por Hectare** - Volume médio de madeira por unidade de área. Indica quanto volume de madeira existe em cada hectare da floresta. É calculado pela média dos volumes de todas as parcelas.")
+
     with col4:
-        st.metric("🌲 Estoque Total", formatar_numero_inteligente(stats['estoque_total_m3'], "m³"))
+        st.metric("🌲 Estoque Total", formatar_numero_inteligente(stats['estoque_total_m3'], "m³"),
+                  help="**Estoque Total** - Volume total de madeira em toda a floresta, calculado multiplicando a produtividade pela área total (Volume/ha × Área Total). Representa toda a madeira disponível no povoamento.")
+
     with col5:
-        st.metric("🚀 IMA Médio", f"{formatar_brasileiro(stats['ima_vol_medio'], 1)} m³/ha/ano")
+        ima_col1, ima_col2 = st.columns([3, 1])
+        with ima_col1:
+            st.metric("🚀 IMA Médio", f"{formatar_brasileiro(stats['ima_vol_medio'], 1)} m³/ha/ano",
+                      help="**Incremento Médio Anual** - Crescimento médio anual em volume por hectare (Volume ÷ Idade). Indica a velocidade de crescimento da floresta e é fundamental para planejar o corte.")
+        with ima_col2:
+            with st.popover("ℹ️"):
+                st.markdown("""
+                **📈 Incremento Médio Anual (IMA)**
+
+                **🔍 Definição:**
+                Medida que indica o crescimento médio anual em volume por hectare ao longo da vida da floresta.
+
+                **🧮 Fórmula:**
+                ```
+                IMA = Volume (m³/ha) ÷ Idade (anos)
+                ```
+
+                **📊 Interpretação (Eucalipto):**
+                - **> 30 m³/ha/ano**: Alta produtividade (sítio excelente)
+                - **20-30 m³/ha/ano**: Média produtividade (sítio bom)  
+                - **< 20 m³/ha/ano**: Baixa produtividade (sítio regular/pobre)
+
+                **💡 Uso Prático:**
+                - Comparar produtividade entre talhões
+                - Avaliar qualidade do sítio florestal
+                - Determinar idade ideal de corte
+                - Calcular viabilidade econômica do plantio
+                - Projetar crescimento futuro
+                """)
+
+
+def mostrar_metricas_secundarias_com_definicoes(stats):
+    """Mostra métricas secundárias com definições completas"""
+    st.subheader("📈 Características Dendrométricas")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("📏 DAP Médio", f"{formatar_brasileiro(stats.get('dap_medio', 15.0), 1)} cm",
+                  help="**Diâmetro à Altura do Peito (DAP)** - Diâmetro médio das árvores medido a 1,30m do solo. É a medida padrão para avaliar o tamanho das árvores e calcular volume. Quanto maior o DAP, maior a árvore.")
+
+    with col2:
+        st.metric("🌳 Altura Média", f"{formatar_brasileiro(stats.get('altura_media', 20.0), 1)} m",
+                  help="**Altura Total Média** - Altura média das árvores desde o solo até o topo da copa. Junto com o DAP, é usada para calcular o volume de madeira. Indica o desenvolvimento vertical do povoamento.")
+
+    with col3:
+        cv_volume = stats.get('cv_volume', 20.0)
+        cv_qualif = "Baixo" if cv_volume < 20 else "Médio" if cv_volume < 40 else "Alto"
+        st.metric("📊 CV Volume", f"{formatar_brasileiro(cv_volume, 1)}%",
+                  help=f"**Coeficiente de Variação do Volume** - Medida de variabilidade entre parcelas ({cv_qualif}). CV baixo (<20%) indica floresta uniforme; CV alto (>40%) indica grande variação entre parcelas. Afeta a precisão do inventário.")
+
+    with col4:
+        st.metric("📅 Idade Média", f"{formatar_brasileiro(stats.get('idade_media', 5.0), 1)} anos",
+                  help="**Idade do Povoamento** - Tempo desde o plantio até a data do inventário. É fundamental para calcular o IMA e determinar quando a floresta estará pronta para corte. Geralmente eucalipto é cortado entre 6-8 anos.")
+
+
+def mostrar_classificacao_produtividade_com_definicoes(stats):
+    """Mostra classificação de produtividade com definições"""
+    st.subheader("📊 Classificação de Produtividade")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric(
+            "🌲🌲🌲 Classe Alta",
+            f"{stats.get('classe_alta', 0)} parcelas",
+            help=f"**Parcelas de Alta Produtividade** - Parcelas com volume ≥ {stats.get('q75_volume', 120.0):.1f} m³/ha (75% superior). Representam as melhores áreas da floresta, com crescimento excelente e alta qualidade de sítio."
+        )
+
+    with col2:
+        st.metric(
+            "🌲🌲 Classe Média",
+            f"{stats.get('classe_media', 0)} parcelas",
+            help=f"**Parcelas de Média Produtividade** - Parcelas com volume entre {stats.get('q25_volume', 80.0):.1f} e {stats.get('q75_volume', 120.0):.1f} m³/ha (50% central). Representam a produtividade típica da floresta."
+        )
+
+    with col3:
+        st.metric(
+            "🌲 Classe Baixa",
+            f"{stats.get('classe_baixa', 0)} parcelas",
+            help=f"**Parcelas de Baixa Produtividade** - Parcelas com volume < {stats.get('q25_volume', 80.0):.1f} m³/ha (25% inferior). Podem indicar problemas como pragas, doenças, solos pobres ou competição."
+        )
+
+
+def mostrar_potencial_comercial_com_definicoes(stats):
+    """Mostra potencial comercial e ambiental com definições"""
+    st.subheader("💰 Potencial Comercial & Ambiental")
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.metric("📦 Volume Comercial", f"{formatar_brasileiro(stats.get('vol_comercial_medio_ha', 85.0), 1)} m³/ha",
+                  help="**Volume Comercial** - Volume aproveitável para produtos madeireiros (toras, mourões, cavacos). Geralmente 80-90% do volume total, excluindo pontas, galhos e defeitos.")
+
+    with col2:
+        st.metric("🌿 Biomassa Total", formatar_numero_inteligente(stats.get('biomassa_total_ton', 250), "ton"),
+                  help="**Biomassa Total** - Peso seco de toda a madeira na floresta. Calculada multiplicando volume × densidade da madeira × fator de forma. Usada para energia e cálculos de carbono.")
+
+    with col3:
+        st.metric("🌱 Carbono Estocado", formatar_numero_inteligente(stats.get('carbono_estimado_ton', 118), "ton CO₂"),
+                  help="**Carbono Estocado** - Quantidade de CO₂ equivalente sequestrado da atmosfera e armazenado na madeira (~47% da biomassa). Importante para créditos de carbono e sustentabilidade.")
+
+    with col4:
+        st.metric("🏗️ Área Basal", f"{formatar_brasileiro(stats.get('area_basal_media_ha', 25.0), 1)} m²/ha",
+                  help="**Área Basal** - Soma das áreas seccionais (DAP) de todas as árvores por hectare. Medida da ocupação do espaço pelas árvores. Para eucalipto adulto, varia de 15-35 m²/ha.")
+
+
+def mostrar_resultados_inventario(resultados):
+    """Mostra os resultados finais do inventário com formatação brasileira"""
+    stats = resultados['estatisticas_gerais']
+
+    # Métricas principais
+    mostrar_metricas_principais_com_definicoes(stats)
+
+    st.markdown("---")
+
+    # Métricas secundárias
+    mostrar_metricas_secundarias_com_definicoes(stats)
+
+    st.markdown("---")
+
+    # Classificação de produtividade
+    mostrar_classificacao_produtividade_com_definicoes(stats)
+
+    st.markdown("---")
+
+    # Potencial comercial
+    mostrar_potencial_comercial_com_definicoes(stats)
 
     # Modelos utilizados
     st.subheader("🏆 Modelos Utilizados")
@@ -766,7 +865,7 @@ def mostrar_resultados_inventario(resultados):
         st.success(
             f"📊 **Volumétrico**: {resultados['modelos_utilizados']['volumetrico']} (R² = {formatar_brasileiro(vol_r2, 3)})")
 
-    # NOVO: Mostrar configuração aplicada
+    # Configuração aplicada
     with st.expander("⚙️ Configuração Aplicada neste Inventário"):
         config_aplicada = resultados.get('config_aplicada', {})
         col1, col2 = st.columns(2)
@@ -784,89 +883,24 @@ def mostrar_resultados_inventario(resultados):
             st.write(f"• Fator forma: {config_aplicada.get('fator_forma', 0.5)}")
 
     # Abas com resultados detalhados
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📊 Resumo Geral",
+    tab1, tab2, tab3, tab4 = st.tabs([
         "🌳 Por Talhão",
-        "📈 Crescimento & IMA",
-        "🌿 Estrutura & Densidade",
         "📋 Dados Completos",
+        "📚 Glossário",
         "💾 Downloads"
     ])
 
     with tab1:
-        mostrar_aba_resumo_geral(stats)
-
-    with tab2:
         mostrar_aba_talhao(resultados)
 
-    with tab3:
-        mostrar_aba_crescimento_ima(stats, resultados)
-
-    with tab4:
-        mostrar_aba_estrutura_densidade(stats, resultados)
-
-    with tab5:
+    with tab2:
         mostrar_aba_dados_completos(resultados)
 
-    with tab6:
+    with tab3:
+        criar_glossario_florestal()
+
+    with tab4:
         mostrar_aba_downloads(resultados)
-
-
-def mostrar_aba_resumo_geral(stats):
-    """Mostra aba com resumo geral melhorado"""
-    st.subheader("📊 Características Dendrométricas")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("📏 DAP Médio", f"{formatar_brasileiro(stats['dap_medio'], 1)} cm")
-        st.caption(
-            f"Amplitude: {formatar_brasileiro(stats['dap_min'], 1)} - {formatar_brasileiro(stats['dap_max'], 1)} cm")
-
-    with col2:
-        st.metric("🌳 Altura Média", f"{formatar_brasileiro(stats['altura_media'], 1)} m")
-        st.caption(
-            f"Amplitude: {formatar_brasileiro(stats['altura_min'], 1)} - {formatar_brasileiro(stats['altura_max'], 1)} m")
-
-    with col3:
-        st.metric("📊 CV Volume", f"{formatar_brasileiro(stats['cv_volume'], 1)}%")
-        cv_qualif = "Baixo" if stats['cv_volume'] < 20 else "Médio" if stats['cv_volume'] < 40 else "Alto"
-        st.caption(f"Variabilidade: {cv_qualif}")
-
-    with col4:
-        st.metric("📅 Idade Média", f"{formatar_brasileiro(stats['idade_media'], 1)} anos")
-
-    # Classificação de produtividade
-    st.subheader("📊 Classificação de Produtividade")
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("🌲🌲🌲 Classe Alta", f"{stats['classe_alta']} parcelas")
-
-    with col2:
-        st.metric("🌲🌲 Classe Média", f"{stats['classe_media']} parcelas")
-
-    with col3:
-        st.metric("🌲 Classe Baixa", f"{stats['classe_baixa']} parcelas")
-
-    # Métricas comerciais e ambientais
-    st.subheader("💰 Potencial Comercial & Ambiental")
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("📦 Volume Comercial", f"{formatar_brasileiro(stats['vol_comercial_medio_ha'], 1)} m³/ha")
-        st.metric("📦 Estoque Comercial", formatar_numero_inteligente(stats['estoque_comercial_total_m3'], "m³"))
-
-    with col2:
-        st.metric("🌿 Biomassa Total", formatar_numero_inteligente(stats['biomassa_total_ton'], "ton"))
-        st.metric("🌱 Carbono Estocado", formatar_numero_inteligente(stats['carbono_estimado_ton'], "ton CO₂"))
-
-    with col3:
-        st.metric("🏗️ Área Basal Média", f"{formatar_brasileiro(stats['area_basal_media_ha'], 1)} m²/ha")
-        st.metric("🌲 Densidade Média", f"{formatar_brasileiro(stats['densidade_media_ha'], 0)} árv/ha")
-
-    with col4:
-        st.metric("📈 Mortalidade", f"{formatar_brasileiro(stats['mortalidade_media'], 1)}%")
-        st.metric("🎯 Índice de Sítio", f"{formatar_brasileiro(stats['indice_sitio_medio'], 2)}")
 
 
 def mostrar_aba_talhao(resultados):
@@ -894,45 +928,11 @@ def mostrar_aba_talhao(resultados):
     st.dataframe(df_display, hide_index=True, use_container_width=True)
 
 
-def mostrar_aba_crescimento_ima(stats, resultados):
-    """Mostra aba focada em crescimento e IMA"""
-    st.subheader("📈 Análise de Crescimento e IMA")
-
-    # Classificação de IMA
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        st.metric("🌟 IMA Excelente", f"{stats['ima_excelente']} parcelas")
-    with col2:
-        st.metric("📊 IMA Bom", f"{stats['ima_bom']} parcelas")
-    with col3:
-        st.metric("📉 IMA Regular", f"{stats['ima_regular']} parcelas")
-
-
-def mostrar_aba_estrutura_densidade(stats, resultados):
-    """Mostra aba com análise de estrutura e densidade"""
-    st.subheader("🌿 Estrutura do Povoamento e Densidade")
-
-    # Métricas de densidade
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.metric("🌲 Densidade Atual", f"{formatar_brasileiro(stats['densidade_media_ha'], 0)} árv/ha")
-    with col2:
-        densidade_inicial = resultados['parametros_utilizados'].get('densidade_plantio', 1667)
-        st.metric("🌱 Densidade Inicial", f"{formatar_brasileiro(densidade_inicial, 0)} árv/ha")
-    with col3:
-        st.metric("📉 Mortalidade", f"{formatar_brasileiro(stats['mortalidade_media'], 1)}%")
-    with col4:
-        sobrevivencia = 100 - stats['mortalidade_media']
-        st.metric("✅ Sobrevivência", f"{formatar_brasileiro(sobrevivencia, 1)}%")
-
-
 def mostrar_aba_dados_completos(resultados):
     """Mostra aba com dados completos"""
     st.subheader("📋 Dados Completos")
 
-    # Seletor de dataset
+    # Seletores para diferentes datasets
     datasets = {
         "Resumo por Parcela": resultados['resumo_parcelas'],
         "Resumo por Talhão": resultados['resumo_talhoes'],
@@ -951,70 +951,126 @@ def mostrar_aba_dados_completos(resultados):
     st.dataframe(df_selecionado, hide_index=True, use_container_width=True)
 
 
+def criar_glossario_florestal():
+    """Cria um glossário completo de termos florestais"""
+    st.subheader("📚 Glossário de Termos Florestais")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("""
+        **🌲 TERMOS BÁSICOS:**
+
+        **• DAP (Diâmetro à Altura do Peito)**: Diâmetro da árvore medido a 1,30m do solo
+
+        **• Altura Total**: Distância do solo até o topo da copa da árvore
+
+        **• Volume**: Quantidade de madeira na árvore (m³)
+
+        **• Área Basal**: Soma das áreas seccionais de todas as árvores
+
+        **• Densidade**: Número de árvores por unidade de área
+
+        **• Parcela**: Unidade amostral do inventário (ex: 400m²)
+
+        **• Talhão**: Unidade de manejo florestal homogênea
+
+        **🎯 ÍNDICES DE CRESCIMENTO:**
+
+        **• IMA (Incremento Médio Anual)**: Volume médio produzido por ano
+
+        **• Índice de Sítio**: Qualidade do local para crescimento
+
+        **• Produtividade**: Volume de madeira por unidade de área
+
+        **• Rotação**: Período do plantio ao corte
+        """)
+
+    with col2:
+        st.markdown("""
+        **📊 TERMOS ESTATÍSTICOS:**
+
+        **• CV (Coeficiente de Variação)**: Medida de variabilidade (%)
+
+        **• Quartis**: Divisão dos dados em 4 partes iguais
+
+        **• Intensidade Amostral**: % da área efetivamente medida
+
+        **• Erro de Amostragem**: Margem de erro das estimativas
+
+        **• R² (Coeficiente de Determinação)**: Qualidade do modelo
+
+        **💰 TERMOS COMERCIAIS:**
+
+        **• Volume Comercial**: Volume aproveitável para produtos
+
+        **• Biomassa**: Peso seco da madeira
+
+        **• Carbono Estocado**: CO₂ sequestrado e armazenado
+
+        **• Fator de Forma**: Relação entre volume real e cilíndrico
+
+        **🔬 MÉTODOS:**
+
+        **• Smalian**: Método para calcular volume de toras
+
+        **• Modelos Hipsométricos**: Estimam altura a partir do DAP
+
+        **• Modelos Volumétricos**: Estimam volume a partir do DAP e altura
+        """)
+
+
 def mostrar_aba_downloads(resultados):
-    """Mostra aba com downloads - VERSÃO COM KEYS ÚNICAS"""
+    """Mostra aba com opções de download"""
     st.subheader("💾 Downloads")
 
-    # Timestamp único para keys
-    sufixo = f"_{int(time.time())}"
-
-    # Seção de dados
-    st.write("**📁 Arquivos de Dados:**")
     col1, col2, col3 = st.columns(3)
 
     with col1:
         csv_parcelas = resultados['resumo_parcelas'].to_csv(index=False)
         st.download_button(
-            label="📊 Resumo por Parcela",
-            data=csv_parcelas,
-            file_name="resumo_parcelas_detalhado.csv",
-            mime="text/csv",
-            key=gerar_key_unica(f"download_parcelas{sufixo}")  # KEY ÚNICA
+            "📊 Resumo por Parcela",
+            csv_parcelas,
+            "resumo_parcelas_detalhado.csv",
+            "text/csv",
+            help="**Dados por Parcela** - Arquivo CSV com informações detalhadas de cada unidade amostral: volume/ha, DAP médio, altura média, densidade, etc.",
+            key=gerar_key_unica("download_parcelas")
         )
 
     with col2:
         csv_talhoes = resultados['resumo_talhoes'].to_csv(index=False)
         st.download_button(
-            label="🌳 Resumo por Talhão",
-            data=csv_talhoes,
-            file_name="resumo_talhoes_detalhado.csv",
-            mime="text/csv",
-            key=gerar_key_unica(f"download_talhoes{sufixo}")  # KEY ÚNICA
+            "🌳 Resumo por Talhão",
+            csv_talhoes,
+            "resumo_talhoes_detalhado.csv",
+            "text/csv",
+            help="**Dados por Talhão** - Arquivo CSV com dados consolidados por unidade de manejo: produtividade média, estoque total, área, número de parcelas.",
+            key=gerar_key_unica("download_talhoes")
         )
 
     with col3:
         csv_completo = resultados['inventario_completo'].to_csv(index=False)
         st.download_button(
-            label="📋 Inventário Completo",
-            data=csv_completo,
-            file_name="inventario_completo_detalhado.csv",
-            mime="text/csv",
-            key=gerar_key_unica(f"download_completo{sufixo}")  # KEY ÚNICA
+            "📋 Inventário Completo",
+            csv_completo,
+            "inventario_completo_detalhado.csv",
+            "text/csv",
+            help="**Dataset Completo** - Arquivo CSV com dados de todas as árvores: DAP original, altura estimada, volume estimado, códigos, talhão, parcela.",
+            key=gerar_key_unica("download_completo")
         )
 
-    # Relatórios
+    # Relatório executivo
     st.write("**📄 Relatórios:**")
     relatorio = gerar_relatorio_executivo_melhorado(resultados)
 
-    col1, col2 = st.columns(2)
-    with col1:
-        st.download_button(
-            label="📄 Relatório Executivo Completo",
-            data=relatorio,
-            file_name="relatorio_inventario_completo.md",
-            mime="text/markdown",
-            key=gerar_key_unica(f"download_relatorio{sufixo}")  # KEY ÚNICA
-        )
-
-    with col2:
-        relatorio_gestao = gerar_relatorio_gestao(resultados)
-        st.download_button(
-            label="📋 Relatório Gerencial",
-            data=relatorio_gestao,
-            file_name="relatorio_gerencial.md",
-            mime="text/markdown",
-            key=gerar_key_unica(f"download_gestao{sufixo}")  # KEY ÚNICA
-        )
+    st.download_button(
+        "📄 Relatório Executivo Completo",
+        relatorio,
+        "relatorio_inventario_completo.md",
+        "text/markdown",
+        help="**Relatório Executivo** - Resumo completo com todas as análises, modelos utilizados e recomendações de manejo.",
+        key=gerar_key_unica("download_relatorio")
+    )
 
 
 def gerar_relatorio_executivo_melhorado(resultados):
@@ -1068,34 +1124,6 @@ def gerar_relatorio_executivo_melhorado(resultados):
 ---
 *Relatório gerado pelo Sistema Integrado de Inventário Florestal com Configurações Centralizadas*
 *Data: {pd.Timestamp.now().strftime('%d/%m/%Y %H:%M')}*
-"""
-
-    return relatorio
-
-
-def gerar_relatorio_gestao(resultados):
-    """Gera relatório resumido para gestão"""
-    stats = resultados['estatisticas_gerais']
-
-    relatorio = f"""# RELATÓRIO GERENCIAL - INVENTÁRIO FLORESTAL
-
-## 📊 RESUMO EXECUTIVO
-**Situação Atual do Patrimônio Florestal**
-
-### 🎯 Indicadores Chave
-- **Área Total**: {formatar_brasileiro(stats.get('area_total_ha', 0), 1)} hectares
-- **Estoque Total**: {formatar_numero_inteligente(stats.get('estoque_total_m3', 0), 'm³')}
-- **Valor Médio**: {formatar_brasileiro(stats.get('vol_medio_ha', 0), 1)} m³/ha
-- **Produtividade**: {formatar_brasileiro(stats.get('ima_vol_medio', 0), 1)} m³/ha/ano
-- **Idade Média**: {formatar_brasileiro(stats.get('idade_media', 0), 1)} anos
-
-### 💰 POTENCIAL ECONÔMICO
-- **Volume Comercial**: {formatar_numero_inteligente(stats.get('estoque_comercial_total_m3', 0), 'm³')}
-- **Biomassa para Energia**: {formatar_numero_inteligente(stats.get('biomassa_total_ton', 0), 'toneladas')}
-- **Créditos de Carbono**: {formatar_numero_inteligente(stats.get('carbono_estimado_ton', 0), 'ton CO₂')}
-
----
-**Próxima avaliação recomendada**: {(pd.Timestamp.now() + pd.DateOffset(years=1)).strftime('%m/%Y')}
 """
 
     return relatorio
