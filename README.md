@@ -3,23 +3,32 @@
 Sistema modular para análise completa de inventário florestal com modelos hipsométricos e volumétricos.
 
 ## 🚀 Funcionalidades
-
-### 📊 **Três Etapas Integradas**
-
-1. **🌳 Modelos Hipsométricos** (7 modelos)
+📁 Upload de Dados
+    ↓
+⚙️ Etapa 0: Configurações (NOVA)
+    ├── 🔍 Filtros de Dados
+    ├── 📏 Áreas dos Talhões
+    ├── 🌱 Parâmetros Florestais
+    └── 🧮 Configurações de Modelos
+    ↓
+🌳 Etapa 1: Hipsométricos (USA CONFIG GLOBAL)
+   **🌳 Modelos Hipsométricos** (7 modelos)
    - Curtis, Campos, Henri, Prodan
    - Chapman, Weibull, Mononuclear
-   - Seleção automática do melhor modelo
-
-2. **📏 Modelos Volumétricos** (4 modelos + Cubagem)
+     - Seleção automática do melhor model
+      ↓
+📊 Etapa 2: Volumétricos (USA CONFIG GLOBAL)
+   **📏 Modelos Volumétricos** (4 modelos + Cubagem)
    - Schumacher-Hall, G1, G2, G3
    - Cubagem pelo método de Smalian
-   - Seleção automática do melhor modelo
-
-3. **📈 Inventário Final**
+     - Seleção automática do melhor modelo
+      ↓
+📈 Etapa 3: Inventário (USA CONFIG GLOBAL)
+   **📈 Inventário Final**
    - Aplicação dos melhores modelos
    - Cálculos de produtividade
    - Relatórios e visualizações
+
 
 ## 📁 Estrutura do Projeto
 

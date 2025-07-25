@@ -1,6 +1,7 @@
-# ui/sidebar.py
+# ui/sidebar.py - VERSÃO MELHORADA COM CORREÇÃO DE PERSISTÊNCIA
 '''
 Interface da barra lateral para upload de arquivos - Versão melhorada com status das etapas
+NOVO: Correção para persistir arquivos opcionais no session_state
 '''
 
 import streamlit as st
@@ -9,6 +10,7 @@ import streamlit as st
 def criar_sidebar():
     '''
     Cria a interface da barra lateral com uploads e status das etapas
+    CORREÇÃO: Agora persiste arquivos opcionais no session_state de forma segura
 
     Returns:
         dict: Dicionário com os arquivos carregados
@@ -29,19 +31,41 @@ def criar_sidebar():
         help="Medições detalhadas (arv, talhao, d_cm, h_m, D_cm, H_m)"
     )
 
-    # Upload opcional de shapefile para áreas
+    # CORREÇÃO: Upload opcional de shapefile para áreas COM PERSISTÊNCIA
     arquivo_shapefile = st.sidebar.file_uploader(
         "🗺️ Shapefile Áreas (Opcional)",
         type=['shp', 'zip'],
-        help="Arquivo shapefile com áreas dos talhões"
+        help="Arquivo shapefile com áreas dos talhões",
+        key="upload_shapefile_persistente"
     )
 
-    # Upload opcional de coordenadas
+    # CORREÇÃO: Armazenar shapefile no session_state de forma segura
+    try:
+        if arquivo_shapefile is not None:
+            st.session_state.arquivo_shapefile = arquivo_shapefile
+            st.sidebar.success(f"✅ Shapefile salvo: {arquivo_shapefile.name}")
+        elif not hasattr(st.session_state, 'arquivo_shapefile'):
+            st.session_state.arquivo_shapefile = None
+    except Exception as e:
+        st.sidebar.error(f"Erro ao salvar shapefile: {e}")
+
+    # CORREÇÃO: Upload opcional de coordenadas COM PERSISTÊNCIA
     arquivo_coordenadas = st.sidebar.file_uploader(
         "📍 Coordenadas Parcelas (Opcional)",
         type=['csv', 'xlsx', 'xls'],
-        help="Arquivo com coordenadas X,Y das parcelas"
+        help="Arquivo com coordenadas X,Y das parcelas",
+        key="upload_coordenadas_persistente"
     )
+
+    # CORREÇÃO: Armazenar coordenadas no session_state de forma segura
+    try:
+        if arquivo_coordenadas is not None:
+            st.session_state.arquivo_coordenadas = arquivo_coordenadas
+            st.sidebar.success(f"✅ Coordenadas salvas: {arquivo_coordenadas.name}")
+        elif not hasattr(st.session_state, 'arquivo_coordenadas'):
+            st.session_state.arquivo_coordenadas = None
+    except Exception as e:
+        st.sidebar.error(f"Erro ao salvar coordenadas: {e}")
 
     arquivos = {
         'inventario': arquivo_inventario,
@@ -53,7 +77,7 @@ def criar_sidebar():
     # Mostrar status dos arquivos
     mostrar_status_arquivos(arquivos)
 
-    # NOVO: Mostrar progresso das etapas na sidebar
+    # Mostrar progresso das etapas na sidebar (versão corrigida)
     mostrar_progresso_etapas_sidebar()
 
     # Mostrar informações adicionais
@@ -64,7 +88,8 @@ def criar_sidebar():
 
 def mostrar_status_arquivos(arquivos):
     '''
-    Mostra o status dos arquivos carregados
+    Mostra o status dos arquivos carregados - VERSÃO MELHORADA
+    NOVO: Mostra também arquivos persistidos no session_state
 
     Args:
         arquivos: Dict com os arquivos
@@ -87,72 +112,113 @@ def mostrar_status_arquivos(arquivos):
     else:
         st.sidebar.error("❌ Cubagem necessária")
 
-    # Opcionais
-    if arquivos['shapefile'] is not None:
-        st.sidebar.info("📁 Shapefile carregado")
-        st.sidebar.caption(f"📄 {arquivos['shapefile'].name}")
+    # NOVO: Seção para arquivos opcionais (verifica session_state também)
+    st.sidebar.markdown("**Arquivos Opcionais:**")
 
+    # Shapefile - Verificar tanto upload atual quanto session_state
+    shapefile_ativo = None
+    if arquivos['shapefile'] is not None:
+        shapefile_ativo = arquivos['shapefile']
+    elif hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
+        shapefile_ativo = st.session_state.arquivo_shapefile
+
+    if shapefile_ativo is not None:
+        st.sidebar.info("📁 Shapefile ativo")
+        st.sidebar.caption(f"📄 {shapefile_ativo.name}")
+    else:
+        st.sidebar.warning("📁 Shapefile: Não carregado")
+
+    # Coordenadas - Verificar tanto upload atual quanto session_state
+    coordenadas_ativas = None
     if arquivos['coordenadas'] is not None:
-        st.sidebar.info("📁 Coordenadas carregadas")
-        st.sidebar.caption(f"📄 {arquivos['coordenadas'].name}")
+        coordenadas_ativas = arquivos['coordenadas']
+    elif hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
+        coordenadas_ativas = st.session_state.arquivo_coordenadas
+
+    if coordenadas_ativas is not None:
+        st.sidebar.info("📁 Coordenadas ativas")
+        st.sidebar.caption(f"📄 {coordenadas_ativas.name}")
+    else:
+        st.sidebar.warning("📁 Coordenadas: Não carregadas")
+
+    # NOVO: Debug opcional para desenvolvedores
+    mostrar_debug_arquivos_opcional()
+
+
+def mostrar_debug_arquivos_opcional():
+    '''NOVO: Debug opcional para verificar session_state'''
+    if st.sidebar.checkbox("🔍 Debug Session State", key="debug_session_arquivos"):
+        st.sidebar.markdown("**Session State - Arquivos:**")
+
+        attrs_arquivo = ['arquivo_shapefile', 'arquivo_coordenadas']
+        for attr in attrs_arquivo:
+            if hasattr(st.session_state, attr):
+                value = getattr(st.session_state, attr)
+                if value is not None and hasattr(value, 'name'):
+                    st.sidebar.success(f"✅ {attr}: {value.name}")
+                else:
+                    st.sidebar.warning(f"⚠️ {attr}: None")
+            else:
+                st.sidebar.error(f"❌ {attr}: Não existe")
 
 
 def mostrar_progresso_etapas_sidebar():
-    '''NOVO: Mostra o progresso das etapas na sidebar'''
+    '''Mostra o progresso das etapas na sidebar - VERSÃO CORRIGIDA'''
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔄 Progresso das Etapas")
 
-    # Verificar se session state está inicializado
-    if not hasattr(st.session_state, 'etapa1_concluida'):
-        st.sidebar.info("💡 Execute a análise para ver o progresso")
-        return
+    # CORREÇÃO: Verificar configurações primeiro
+    config_status = False
+    if hasattr(st.session_state, 'config_global'):
+        config_status = st.session_state.config_global.get('configurado', False)
 
-    # Etapa 1
-    if st.session_state.etapa1_concluida:
-        st.sidebar.success("✅ **Etapa 1** - Hipsométricos")
-        if hasattr(st.session_state, 'resultados_etapa1') and st.session_state.resultados_etapa1:
-            melhor_hip = st.session_state.resultados_etapa1.get('melhor_modelo', 'N/A')
-            st.sidebar.caption(f"🏆 Melhor: {melhor_hip}")
+    if config_status:
+        st.sidebar.success("✅ **Etapa 0** - Configurado")
     else:
-        st.sidebar.info("⏳ **Etapa 1** - Hipsométricos")
+        st.sidebar.warning("⚠️ **Etapa 0** - Configure primeiro")
 
-    # Etapa 2
-    if st.session_state.etapa2_concluida:
-        st.sidebar.success("✅ **Etapa 2** - Volumétricos")
-        if hasattr(st.session_state, 'resultados_etapa2') and st.session_state.resultados_etapa2:
-            melhor_vol = st.session_state.resultados_etapa2.get('melhor_modelo', 'N/A')
-            st.sidebar.caption(f"🏆 Melhor: {melhor_vol}")
-    else:
-        st.sidebar.info("⏳ **Etapa 2** - Volumétricos")
+    # CORREÇÃO: Verificar session states de forma segura
+    etapas_info = [
+        ('resultados_hipsometricos', 'Etapa 1 - Hipsométricos'),
+        ('resultados_volumetricos', 'Etapa 2 - Volumétricos'),
+        ('inventario_processado', 'Etapa 3 - Inventário')
+    ]
 
-    # Etapa 3
-    if st.session_state.etapa3_concluida:
-        st.sidebar.success("✅ **Etapa 3** - Inventário")
-        if hasattr(st.session_state, 'resultados_etapa3') and st.session_state.resultados_etapa3:
-            stats = st.session_state.resultados_etapa3.get('estatisticas_gerais', {})
-            vol_medio = stats.get('vol_medio_ha', 0)
-            if vol_medio > 0:
-                st.sidebar.caption(f"📊 {vol_medio:.1f} m³/ha")
-    else:
-        st.sidebar.info("⏳ **Etapa 3** - Inventário")
+    etapas_concluidas = 0
+
+    for state_key, nome_etapa in etapas_info:
+        # CORREÇÃO: Usar getattr em vez de __dict__
+        try:
+            resultado = getattr(st.session_state, state_key, None)
+
+            if resultado is not None:
+                st.sidebar.success(f"✅ **{nome_etapa}**")
+
+                # Mostrar melhor modelo se disponível
+                if isinstance(resultado, dict):
+                    melhor = resultado.get('melhor_modelo', 'N/A')
+                    if melhor != 'N/A':
+                        st.sidebar.caption(f"🏆 Melhor: {melhor}")
+
+                etapas_concluidas += 1
+            else:
+                st.sidebar.info(f"⏳ **{nome_etapa}**")
+
+        except Exception as e:
+            # Se houver erro, apenas mostrar como pendente
+            st.sidebar.info(f"⏳ **{nome_etapa}**")
 
     # Mostrar progresso geral
-    etapas_concluidas = sum([
-        st.session_state.etapa1_concluida,
-        st.session_state.etapa2_concluida,
-        st.session_state.etapa3_concluida
-    ])
-
     if etapas_concluidas > 0:
         progresso = etapas_concluidas / 3
         st.sidebar.progress(progresso, text=f"Progresso: {etapas_concluidas}/3 etapas")
 
         if etapas_concluidas == 3:
-            st.sidebar.balloons()  # Celebração quando completar todas as etapas
+            st.sidebar.success("🎉 Análise Completa!")
 
 
 def mostrar_informacoes_adicionais():
-    '''Mostra informações adicionais na sidebar'''
+    '''Mostra informações adicionais na sidebar - VERSÃO MELHORADA'''
     st.sidebar.markdown("---")
     st.sidebar.subheader("ℹ️ Informações")
 
@@ -169,118 +235,482 @@ def mostrar_informacoes_adicionais():
     - UTF-8 recomendado
     ''')
 
-    # NOVO: Mostrar informações sobre persistência
-    if hasattr(st.session_state, 'analise_executada') and st.session_state.analise_executada:
-        st.sidebar.markdown("---")
-        st.sidebar.info('''
-        💾 **Resultados Salvos**
+    # NOVO: Informações sobre persistência de arquivos
+    with st.sidebar.expander("💾 Persistência de Arquivos"):
+        st.markdown('''
+        **Arquivos Obrigatórios:**
+        - Recarregados a cada navegação
+        - Use sempre os mesmos arquivos
 
-        Os resultados das 3 etapas estão salvos e permanecerão disponíveis até você:
-        - Carregar novos arquivos
-        - Reexecutar a análise
-        - Fechar o navegador
+        **Arquivos Opcionais:**
+        - ✅ Ficam salvos na sessão
+        - ✅ Persistem entre páginas
+        - ✅ Detectados nas configurações
+
+        **Dica:** Carregue shapefile/coordenadas uma vez e navegue livremente!
         ''')
 
-    # NOVO: Botões de ação rápida
-    if hasattr(st.session_state, 'analise_executada') and st.session_state.analise_executada:
+    # NOVO: Mostrar informações sobre configurações
+    if hasattr(st.session_state, 'config_global'):
+        config = st.session_state.config_global
+        configurado = config.get('configurado', False)
+
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("⚙️ Status Configuração")
+
+        if configurado:
+            st.sidebar.success("✅ Sistema Configurado")
+
+            # Mostrar resumo das configurações principais
+            with st.sidebar.expander("📋 Resumo Config"):
+                st.write(f"• Diâmetro min: {config.get('diametro_min', 4.0)} cm")
+
+                talhoes_excluir = config.get('talhoes_excluir', [])
+                if talhoes_excluir:
+                    st.write(f"• Talhões excluídos: {len(talhoes_excluir)}")
+                else:
+                    st.write("• Talhões excluídos: Nenhum")
+
+                metodo_area = config.get('metodo_area', 'Simular automaticamente')
+                st.write(f"• Método área: {metodo_area[:20]}...")
+
+                # NOVO: Mostrar se arquivos opcionais foram detectados
+                if metodo_area == "Coordenadas das parcelas":
+                    st.success("📍 Coordenadas detectadas")
+                elif metodo_area == "Upload shapefile":
+                    st.success("📁 Shapefile detectado")
+        else:
+            st.sidebar.warning("⚠️ Configure o Sistema")
+            if st.sidebar.button("⚙️ Ir para Configurações", use_container_width=True):
+                st.switch_page("pages/0_⚙️_Configurações.py")
+
+    # NOVO: Botões de ação rápida melhorados
+    mostrar_acoes_rapidas_sidebar()
+
+
+def mostrar_acoes_rapidas_sidebar():
+    '''Seção de ações rápidas na sidebar - VERSÃO CORRIGIDA'''
+    # CORREÇÃO: Verificar resultados de forma segura
+    tem_resultados = False
+
+    try:
+        # Verificar cada resultado individualmente
+        resultados_disponiveis = [
+            getattr(st.session_state, 'resultados_hipsometricos', None),
+            getattr(st.session_state, 'resultados_volumetricos', None),
+            getattr(st.session_state, 'inventario_processado', None)
+        ]
+
+        tem_resultados = any(resultado is not None for resultado in resultados_disponiveis)
+
+    except Exception:
+        tem_resultados = False
+
+    if tem_resultados:
         st.sidebar.markdown("---")
         st.sidebar.subheader("⚡ Ações Rápidas")
 
-        if st.sidebar.button("🔄 Limpar Resultados", use_container_width=True):
-            # Limpar apenas os resultados, mantendo os dados carregados
-            st.session_state.analise_executada = False
-            st.session_state.resultados_analise = None
-            st.session_state.etapa1_concluida = False
-            st.session_state.etapa2_concluida = False
-            st.session_state.etapa3_concluida = False
-            st.session_state.resultados_etapa1 = None
-            st.session_state.resultados_etapa2 = None
-            st.session_state.resultados_etapa3 = None
-            st.sidebar.success("✅ Resultados limpos!")
-            st.rerun()
+        col1, col2 = st.sidebar.columns(2)
 
-        # Botão para download rápido (se resultados disponíveis)
-        if (hasattr(st.session_state, 'resultados_analise') and
-                st.session_state.resultados_analise is not None):
+        with col1:
+            if st.button("🔄 Limpar", use_container_width=True, key="limpar_resultados"):
+                # CORREÇÃO: Limpar de forma segura
+                keys_para_limpar = ['resultados_hipsometricos', 'resultados_volumetricos', 'inventario_processado']
 
-            # Preparar dados para download rápido
-            resumo_parcelas = st.session_state.resultados_analise.get('resumo_parcelas')
-            if resumo_parcelas is not None:
-                csv_dados = resumo_parcelas.to_csv(index=False)
-                st.sidebar.download_button(
-                    label="📥 Download Resumo",
-                    data=csv_dados,
-                    file_name="resumo_inventario.csv",
-                    mime="text/csv",
-                    use_container_width=True,
-                    help="Download rápido do resumo por parcelas"
-                )
+                for key in keys_para_limpar:
+                    if hasattr(st.session_state, key):
+                        delattr(st.session_state, key)
 
+                st.sidebar.success("✅ Resultados limpos!")
+                st.rerun()
+
+        with col2:
+            if st.button("📊 Relatório", use_container_width=True, key="gerar_relatorio_rapido"):
+                st.switch_page("pages/3_📈_Inventário_Florestal.py")
+
+        # Download rápido se inventário foi processado - VERSÃO SEGURA
+        try:
+            inventario_resultado = getattr(st.session_state, 'inventario_processado', None)
+
+            if inventario_resultado is not None and isinstance(inventario_resultado, dict):
+                if 'resumo_talhoes' in inventario_resultado:
+                    resumo_df = inventario_resultado['resumo_talhoes']
+                    csv_dados = resumo_df.to_csv(index=False)
+
+                    st.sidebar.download_button(
+                        "📥 Download Resumo",
+                        data=csv_dados,
+                        file_name="resumo_inventario_rapido.csv",
+                        mime="text/csv",
+                        use_container_width=True,
+                        help="Download rápido do resumo por talhões"
+                    )
+        except Exception:
+            # Silenciosamente ignorar erro de download se não houver dados
+            pass
+
+    # Mostrar dicas contextuais
+    mostrar_dicas_contextuais()
+
+
+def mostrar_dicas_contextuais():
+    '''NOVO: Dicas contextuais baseadas no estado atual'''
     st.sidebar.markdown("---")
-    st.sidebar.markdown('''
-    **🚀 Dica:**
-    Comece carregando os dois arquivos obrigatórios (Inventário + Cubagem) para ativar o sistema.
 
-    **💡 Nova funcionalidade:**
-    Os resultados de cada etapa ficam sempre disponíveis após a execução!
-    ''')
+    # Determinar contexto atual
+    dados_carregados = (
+            hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None and
+            hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None
+    )
+
+    configurado = (
+            hasattr(st.session_state, 'config_global') and
+            st.session_state.config_global.get('configurado', False)
+    )
+
+    # Dicas baseadas no contexto
+    if not dados_carregados:
+        st.sidebar.info('''
+        **🚀 Próximo Passo:**
+        1. Carregue Inventário e Cubagem
+        2. Configure o sistema (Etapa 0)
+        3. Execute as análises (Etapas 1-3)
+        ''')
+    elif not configurado:
+        st.sidebar.warning('''
+        **⚙️ Configure o Sistema:**
+        Os dados estão carregados!
+        Agora configure filtros e parâmetros na Etapa 0.
+        ''')
+    else:
+        st.sidebar.success('''
+        **✅ Sistema Pronto:**
+        Execute as Etapas 1, 2 e 3 em qualquer ordem.
+        As configurações se aplicam automaticamente!
+        ''')
 
 
 def mostrar_resumo_sidebar():
-    '''NOVO: Mostra resumo dos resultados na sidebar'''
-    if not (hasattr(st.session_state, 'analise_executada') and st.session_state.analise_executada):
-        return
-
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("📊 Resumo Rápido")
-
+    '''Mostra resumo dos resultados na sidebar - VERSÃO CORRIGIDA'''
+    # CORREÇÃO: Verificar de forma segura
     try:
-        resultados = st.session_state.resultados_analise
-        if resultados is None:
+        inventario_resultado = getattr(st.session_state, 'inventario_processado', None)
+
+        if inventario_resultado is None:
             return
 
-        stats = resultados.get('estatisticas_gerais', {})
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("📊 Resumo Rápido")
 
-        # Métricas principais na sidebar
-        st.sidebar.metric(
-            "🌲 Produtividade",
-            f"{stats.get('vol_medio_ha', 0):.1f} m³/ha"
-        )
+        # Verificar se há estatísticas gerais
+        if isinstance(inventario_resultado, dict) and 'estatisticas_gerais' in inventario_resultado:
+            stats = inventario_resultado['estatisticas_gerais']
 
-        st.sidebar.metric(
-            "📏 Área Total",
-            f"{stats.get('area_total_ha', 0):.1f} ha"
-        )
+            # Métricas principais na sidebar
+            if 'volume_medio_ha' in stats:
+                st.sidebar.metric(
+                    "🌲 Produtividade",
+                    f"{stats['volume_medio_ha']:.1f} m³/ha"
+                )
 
-        st.sidebar.metric(
-            "🌳 Estoque",
-            f"{stats.get('estoque_total_m3', 0):,.0f} m³"
-        )
+            if 'area_total' in stats:
+                st.sidebar.metric(
+                    "📏 Área Total",
+                    f"{stats['area_total']:.1f} ha"
+                )
 
-        # Classificação rápida
-        vol_medio = stats.get('vol_medio_ha', 0)
-        if vol_medio >= 150:
-            st.sidebar.success("🌟 Alta Produtividade")
-        elif vol_medio >= 100:
-            st.sidebar.info("📊 Média Produtividade")
-        else:
-            st.sidebar.warning("📈 Baixa Produtividade")
+            if 'estoque_total' in stats:
+                st.sidebar.metric(
+                    "🌳 Estoque Total",
+                    f"{stats['estoque_total']:,.0f} m³"
+                )
+
+            # Classificação rápida
+            vol_medio = stats.get('volume_medio_ha', 0)
+            if vol_medio >= 150:
+                st.sidebar.success("🌟 Alta Produtividade")
+            elif vol_medio >= 100:
+                st.sidebar.info("📊 Média Produtividade")
+            else:
+                st.sidebar.warning("📈 Baixa Produtividade")
 
     except Exception as e:
-        st.sidebar.error(f"Erro no resumo: {e}")
+        # Em caso de erro, apenas não mostrar o resumo
+        pass
+
+
+def debug_session_state_seguro():
+    '''NOVA: Debug seguro do session_state'''
+    if st.sidebar.checkbox("🔍 Debug Session State", key="debug_session_seguro"):
+        st.sidebar.markdown("**Session State - Verificação:**")
+
+        # Verificar atributos importantes
+        atributos_importantes = [
+            'dados_inventario',
+            'dados_cubagem',
+            'config_global',
+            'resultados_hipsometricos',
+            'resultados_volumetricos',
+            'inventario_processado',
+            'arquivo_shapefile',
+            'arquivo_coordenadas'
+        ]
+
+        for attr in atributos_importantes:
+            try:
+                if hasattr(st.session_state, attr):
+                    value = getattr(st.session_state, attr)
+                    if value is not None:
+                        if hasattr(value, 'name'):  # É um arquivo
+                            st.sidebar.success(f"✅ {attr}: {value.name}")
+                        elif isinstance(value, dict):
+                            st.sidebar.success(f"✅ {attr}: Dict ({len(value)} items)")
+                        elif hasattr(value, '__len__'):  # DataFrame ou lista
+                            st.sidebar.success(f"✅ {attr}: {type(value).__name__} ({len(value)})")
+                        else:
+                            st.sidebar.success(f"✅ {attr}: {type(value).__name__}")
+                    else:
+                        st.sidebar.info(f"ℹ️ {attr}: None")
+                else:
+                    st.sidebar.warning(f"⚠️ {attr}: Não existe")
+            except Exception as e:
+                st.sidebar.error(f"❌ {attr}: Erro ({e})")
 
 
 def criar_sidebar_melhorada():
     '''
     Versão melhorada da sidebar com todas as funcionalidades
+    CORREÇÃO: Todas as funções agora são à prova de erros
 
     Returns:
         dict: Dicionário com os arquivos carregados
     '''
-    # Criar sidebar principal
-    arquivos = criar_sidebar()
+    try:
+        # Criar sidebar principal com correções
+        arquivos = criar_sidebar()
 
-    # Adicionar resumo se análise foi executada
-    mostrar_resumo_sidebar()
+        # Adicionar resumo se análise foi executada (versão segura)
+        mostrar_resumo_sidebar()
+
+        # Debug opcional e seguro
+        debug_session_state_seguro()
+
+        return arquivos
+
+    except Exception as e:
+        st.sidebar.error(f"Erro na sidebar: {e}")
+        # Retornar estrutura mínima em caso de erro
+        return {
+            'inventario': None,
+            'cubagem': None,
+            'shapefile': None,
+            'coordenadas': None
+        }
+
+
+def verificar_e_restaurar_arquivos():
+    """
+    NOVA: Verifica e restaura status dos arquivos na sidebar
+    """
+    # Verificar se dados principais ainda existem
+    if (hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None and
+            hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None):
+        st.sidebar.success("✅ Dados principais ativos")
+        st.sidebar.caption(f"📊 Inventário: {len(st.session_state.dados_inventario)} registros")
+        st.sidebar.caption(f"📏 Cubagem: {len(st.session_state.dados_cubagem)} medições")
+
+        # Garantir que arquivos_carregados esteja True
+        st.session_state.arquivos_carregados = True
+
+    # Verificar arquivos opcionais
+    if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
+        st.sidebar.info(f"📁 Shapefile persistido: {st.session_state.arquivo_shapefile.name}")
+
+    if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
+        st.sidebar.info(f"📍 Coordenadas persistidas: {st.session_state.arquivo_coordenadas.name}")
+
+
+# CORREÇÃO 4: Modificar a função criar_sidebar() para incluir verificação
+
+def criar_sidebar_com_verificacao():
+    """
+    Cria sidebar com verificação de arquivos persistidos
+    """
+    st.sidebar.header("📁 Upload de Dados")
+
+    # NOVO: Verificar e mostrar arquivos persistidos primeiro
+    verificar_e_restaurar_arquivos()
+
+    # Upload do arquivo de inventário
+    arquivo_inventario = st.sidebar.file_uploader(
+        "📋 Arquivo de Inventário",
+        type=['csv', 'xlsx', 'xls'],
+        help="Dados de parcelas (D_cm, H_m, talhao, parcela, cod, idade_anos)"
+    )
+
+    # Upload do arquivo de cubagem
+    arquivo_cubagem = st.sidebar.file_uploader(
+        "📏 Arquivo de Cubagem",
+        type=['csv', 'xlsx', 'xls'],
+        help="Medições detalhadas (arv, talhao, d_cm, h_m, D_cm, H_m)"
+    )
+
+    # Upload opcional de shapefile para áreas COM PERSISTÊNCIA
+    arquivo_shapefile = st.sidebar.file_uploader(
+        "🗺️ Shapefile Áreas (Opcional)",
+        type=['shp', 'zip'],
+        help="Arquivo shapefile com áreas dos talhões",
+        key="upload_shapefile_persistente"
+    )
+
+    # Armazenar shapefile no session_state de forma segura
+    try:
+        if arquivo_shapefile is not None:
+            st.session_state.arquivo_shapefile = arquivo_shapefile
+            st.sidebar.success(f"✅ Shapefile salvo: {arquivo_shapefile.name}")
+        elif not hasattr(st.session_state, 'arquivo_shapefile'):
+            st.session_state.arquivo_shapefile = None
+    except Exception as e:
+        st.sidebar.error(f"Erro ao salvar shapefile: {e}")
+
+    # Upload opcional de coordenadas COM PERSISTÊNCIA
+    arquivo_coordenadas = st.sidebar.file_uploader(
+        "📍 Coordenadas Parcelas (Opcional)",
+        type=['csv', 'xlsx', 'xls'],
+        help="Arquivo com coordenadas X,Y das parcelas",
+        key="upload_coordenadas_persistente"
+    )
+
+    # Armazenar coordenadas no session_state de forma segura
+    try:
+        if arquivo_coordenadas is not None:
+            st.session_state.arquivo_coordenadas = arquivo_coordenadas
+            st.sidebar.success(f"✅ Coordenadas salvas: {arquivo_coordenadas.name}")
+        elif not hasattr(st.session_state, 'arquivo_coordenadas'):
+            st.session_state.arquivo_coordenadas = None
+    except Exception as e:
+        st.sidebar.error(f"Erro ao salvar coordenadas: {e}")
+
+    arquivos = {
+        'inventario': arquivo_inventario,
+        'cubagem': arquivo_cubagem,
+        'shapefile': arquivo_shapefile,
+        'coordenadas': arquivo_coordenadas
+    }
+
+    # Mostrar status dos arquivos
+    mostrar_status_arquivos_melhorado(arquivos)
+
+    # Mostrar progresso das etapas na sidebar
+    mostrar_progresso_etapas_sidebar()
+
+    # Mostrar informações adicionais
+    mostrar_informacoes_adicionais()
 
     return arquivos
+
+
+def mostrar_status_arquivos_melhorado(arquivos):
+    """
+    Mostra status melhorado dos arquivos
+    """
+    st.sidebar.subheader("📊 Status dos Arquivos")
+
+    # Verificar dados principais (considerar tanto upload quanto session_state)
+    inventario_ativo = (
+            arquivos['inventario'] is not None or
+            (hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None)
+    )
+
+    cubagem_ativa = (
+            arquivos['cubagem'] is not None or
+            (hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None)
+    )
+
+    # Status inventário
+    if inventario_ativo:
+        if arquivos['inventario'] is not None:
+            st.sidebar.success("✅ Inventário carregado (novo)")
+            st.sidebar.caption(f"📄 {arquivos['inventario'].name}")
+        else:
+            st.sidebar.success("✅ Inventário ativo (sessão)")
+    else:
+        st.sidebar.error("❌ Inventário necessário")
+
+    # Status cubagem
+    if cubagem_ativa:
+        if arquivos['cubagem'] is not None:
+            st.sidebar.success("✅ Cubagem carregada (nova)")
+            st.sidebar.caption(f"📄 {arquivos['cubagem'].name}")
+        else:
+            st.sidebar.success("✅ Cubagem ativa (sessão)")
+    else:
+        st.sidebar.error("❌ Cubagem necessária")
+
+    # Arquivos opcionais
+    st.sidebar.markdown("**Arquivos Opcionais:**")
+
+    # Shapefile
+    shapefile_ativo = (
+            arquivos['shapefile'] is not None or
+            (hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None)
+    )
+
+    if shapefile_ativo:
+        if arquivos['shapefile'] is not None:
+            st.sidebar.info("📁 Shapefile (novo)")
+            st.sidebar.caption(f"📄 {arquivos['shapefile'].name}")
+        else:
+            st.sidebar.info("📁 Shapefile (persistido)")
+            st.sidebar.caption(f"📄 {st.session_state.arquivo_shapefile.name}")
+    else:
+        st.sidebar.warning("📁 Shapefile: Não carregado")
+
+    # Coordenadas
+    coordenadas_ativas = (
+            arquivos['coordenadas'] is not None or
+            (hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None)
+    )
+
+    if coordenadas_ativas:
+        if arquivos['coordenadas'] is not None:
+            st.sidebar.info("📍 Coordenadas (novas)")
+            st.sidebar.caption(f"📄 {arquivos['coordenadas'].name}")
+        else:
+            st.sidebar.info("📍 Coordenadas (persistidas)")
+            st.sidebar.caption(f"📄 {st.session_state.arquivo_coordenadas.name}")
+    else:
+        st.sidebar.warning("📍 Coordenadas: Não carregadas")
+
+
+# FUNÇÃO AUXILIAR PARA VERIFICAR ARQUIVOS PERSISTIDOS
+def obter_arquivos_com_persistencia():
+    '''
+    NOVA: Obtém arquivos considerando tanto upload atual quanto session_state
+
+    Returns:
+        dict: Arquivos disponíveis (atuais + persistidos)
+    '''
+    arquivos_persistidos = {}
+
+    # Shapefile
+    if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
+        arquivos_persistidos['shapefile'] = st.session_state.arquivo_shapefile
+
+    # Coordenadas
+    if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
+        arquivos_persistidos['coordenadas'] = st.session_state.arquivo_coordenadas
+
+    return arquivos_persistidos
+
+
+# FUNÇÃO PARA LIMPAR ARQUIVOS PERSISTIDOS
+def limpar_arquivos_persistidos():
+    '''NOVA: Limpa arquivos opcionais do session_state'''
+    if hasattr(st.session_state, 'arquivo_shapefile'):
+        st.session_state.arquivo_shapefile = None
+
+    if hasattr(st.session_state, 'arquivo_coordenadas'):
+        st.session_state.arquivo_coordenadas = None
+
+    st.sidebar.success("🗑️ Arquivos opcionais removidos!")
