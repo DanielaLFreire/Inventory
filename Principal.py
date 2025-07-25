@@ -139,7 +139,7 @@ def mostrar_progresso_sistema():
 
 def mostrar_navegacao_principal():
     """Mostra navegação principal do sistema com status de configuração"""
-    st.header("🧭 Sistema de Inventário Florestal")
+    st.header("🌲 Sistema de Inventário Florestal")
     st.markdown("### Análise Completa em 4 Etapas")
 
     # NOVO: Verificar status de configuração
@@ -225,7 +225,8 @@ def mostrar_navegacao_principal():
 
 def mostrar_instrucoes():
     """Mostra instruções quando arquivos não estão carregados"""
-    st.header("📋 Como Usar o Sistema")
+    st.header("🌲 Sistema de Inventário Florestal")
+    st.subheader("📋 Como Usar o Sistema")
 
     st.markdown("""
     ### 🎯 ** Fluxo de Trabalho Simplificado**

@@ -44,7 +44,7 @@ def verificar_dados_carregados():
 
 def mostrar_introducao():
     """Mostra introdução sobre configurações centralizadas"""
-    st.title("⚙️ Configurações Globais do Sistema")
+    st.title("🌲 Sistema de Inventário Florestal")
 
     st.markdown("""
     ### 🎯 **Central de Configurações**
