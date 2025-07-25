@@ -9,7 +9,7 @@ import pandas as pd
 
 
 def inicializar_configuracoes_globais():
-    """Inicializa configurações globais no session_state"""
+    """Inicializa configurações globais no session_state - VERSÃO COMPLETA"""
     if 'config_global' not in st.session_state:
         st.session_state.config_global = {
             # Filtros de dados
@@ -34,6 +34,33 @@ def inicializar_configuracoes_globais():
             'incluir_nao_lineares': True,
             'max_iteracoes': 5000,
             'tolerancia_ajuste': 0.01,
+
+            # NOVO: Parâmetros iniciais para modelos não-lineares hipsométricos
+            'parametros_chapman': {
+                'b0': 42.12,  # Altura assintótica
+                'b1': 0.01,   # Taxa de crescimento
+                'b2': 1.00    # Parâmetro de forma
+            },
+            'parametros_weibull': {
+                'a': 42.12,   # Altura assintótica
+                'b': 0.01,    # Parâmetro de escala
+                'c': 1.00     # Parâmetro de forma
+            },
+            'parametros_mononuclear': {
+                'a': 42.12,   # Altura assintótica
+                'b': 1.00,    # Parâmetro de intercepto
+                'c': 0.10     # Taxa de decaimento
+            },
+
+            # NOVO: Parâmetros iniciais para modelos volumétricos não-lineares (se houver)
+            'parametros_vol_nao_lineares': {
+                'enabled': False,  # Por padrão volumétricos são lineares
+                'modelo_customizado': {
+                    'param1': 1.0,
+                    'param2': 0.1,
+                    'param3': 1.0
+                }
+            },
 
             # Estado de configuração
             'configurado': False,
@@ -81,10 +108,7 @@ def limpar_tipos_nao_serializaveis(config):
 
 def mostrar_configuracoes_globais():
     """
-    Interface unificada para todas as configurações do sistema - VERSÃO CORRIGIDA
-
-    Returns:
-        dict: Configurações atualizadas
+    Interface unificada para todas as configurações do sistema - VERSÃO COM PARÂMETROS NÃO-LINEARES
     """
     st.header("⚙️ Configurações Globais do Sistema")
     st.info("💡 Estas configurações se aplicam a todas as etapas da análise")
@@ -96,12 +120,13 @@ def mostrar_configuracoes_globais():
 
     df_inventario = st.session_state.dados_inventario
 
-    # Criar abas para organizar configurações
-    tab1, tab2, tab3, tab4 = st.tabs([
+    # Criar abas para organizar configurações - ADICIONANDO ABA DE PARÂMETROS
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "🔍 Filtros de Dados",
         "📏 Áreas dos Talhões",
         "🌱 Parâmetros Florestais",
-        "🧮 Configurações de Modelos"
+        "🧮 Configurações de Modelos",
+        "🔧 Parâmetros Não-Lineares"  # NOVA ABA
     ])
 
     with tab1:
@@ -116,7 +141,26 @@ def mostrar_configuracoes_globais():
     with tab4:
         config_modelos = configurar_modelos_avancados()
 
-    # Combinar todas as configurações
+    with tab5:  # NOVA ABA
+        st.subheader("🔧 Parâmetros de Modelos Não-Lineares")
+        st.info("⚙️ Estes parâmetros são usados como valores iniciais para os modelos Chapman, Weibull e Mononuclear")
+
+        # Mostrar validação
+        mostrar_validacao_parametros()
+
+        # Botão para resetar
+        resetar_parametros_padrao()
+
+        # Download específico dos parâmetros
+        st.download_button(
+            "📥 Exportar Parâmetros Não-Lineares",
+            data=exportar_parametros_nao_lineares(),
+            file_name="parametros_nao_lineares.json",
+            mime="application/json",
+            key="download_parametros_nao_lineares"
+        )
+
+    # Combinar todas as configurações (config_modelos já inclui os parâmetros)
     config_completa = {
         **st.session_state.config_global,
         **config_filtros,
@@ -125,7 +169,7 @@ def mostrar_configuracoes_globais():
         **config_modelos
     }
 
-    # NOVO: Limpar tipos não-serializáveis
+    # Limpar tipos não-serializáveis
     config_completa = limpar_tipos_nao_serializaveis(config_completa)
 
     # Atualizar session_state
@@ -424,9 +468,10 @@ def configurar_parametros_florestais():
 
 
 def configurar_modelos_avancados():
-    """Configurações avançadas de modelos"""
+    """Configurações avançadas de modelos - VERSÃO COM PARÂMETROS NÃO-LINEARES"""
     st.subheader("🧮 Configurações de Modelos")
 
+    # Configurações básicas
     col1, col2 = st.columns(2)
 
     with col1:
@@ -457,10 +502,324 @@ def configurar_modelos_avancados():
             key="global_tolerancia_ajuste"
         )
 
+    # NOVO: Configuração de parâmetros iniciais para modelos não-lineares
+    if incluir_nao_lineares:
+        st.markdown("---")
+        st.subheader("🔧 Configuração de Parâmetros Iniciais")
+        st.info("⚙️ Configure os valores iniciais para os modelos não-lineares (importante para convergência)")
+
+        # Abas para cada modelo não-linear
+        tab_chapman, tab_weibull, tab_mononuclear = st.tabs([
+            "🔧 Chapman", "📈 Weibull", "📊 Mononuclear"
+        ])
+
+        # Chapman
+        with tab_chapman:
+            st.write("**Modelo de Chapman:** H = b₀ × (1 - exp(-b₁ × D))^b₂")
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                chapman_b0 = st.number_input(
+                    "b₀ - Altura assintótica",
+                    min_value=10.0,
+                    max_value=100.0,
+                    value=float(st.session_state.config_global.get('parametros_chapman', {}).get('b0', 42.12)),
+                    step=0.01,
+                    help="Altura máxima teórica que a árvore pode atingir",
+                    key="chapman_b0"
+                )
+
+            with col2:
+                chapman_b1 = st.number_input(
+                    "b₁ - Taxa de crescimento",
+                    min_value=0.001,
+                    max_value=1.0,
+                    value=float(st.session_state.config_global.get('parametros_chapman', {}).get('b1', 0.01)),
+                    step=0.001,
+                    format="%.3f",
+                    help="Velocidade de crescimento em altura",
+                    key="chapman_b1"
+                )
+
+            with col3:
+                chapman_b2 = st.number_input(
+                    "b₂ - Parâmetro de forma",
+                    min_value=0.1,
+                    max_value=5.0,
+                    value=float(st.session_state.config_global.get('parametros_chapman', {}).get('b2', 1.00)),
+                    step=0.01,
+                    help="Forma da curva de crescimento",
+                    key="chapman_b2"
+                )
+
+        # Weibull
+        with tab_weibull:
+            st.write("**Modelo de Weibull:** H = a × (1 - exp(-b × D^c))")
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                weibull_a = st.number_input(
+                    "a - Altura assintótica",
+                    min_value=10.0,
+                    max_value=100.0,
+                    value=float(st.session_state.config_global.get('parametros_weibull', {}).get('a', 42.12)),
+                    step=0.01,
+                    help="Altura máxima teórica",
+                    key="weibull_a"
+                )
+
+            with col2:
+                weibull_b = st.number_input(
+                    "b - Parâmetro de escala",
+                    min_value=0.001,
+                    max_value=1.0,
+                    value=float(st.session_state.config_global.get('parametros_weibull', {}).get('b', 0.01)),
+                    step=0.001,
+                    format="%.3f",
+                    help="Parâmetro de escala da distribuição",
+                    key="weibull_b"
+                )
+
+            with col3:
+                weibull_c = st.number_input(
+                    "c - Parâmetro de forma",
+                    min_value=0.1,
+                    max_value=5.0,
+                    value=float(st.session_state.config_global.get('parametros_weibull', {}).get('c', 1.00)),
+                    step=0.01,
+                    help="Forma da distribuição Weibull",
+                    key="weibull_c"
+                )
+
+        # Mononuclear
+        with tab_mononuclear:
+            st.write("**Modelo Mononuclear:** H = a × (1 - b × exp(-c × D))")
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                mono_a = st.number_input(
+                    "a - Altura assintótica",
+                    min_value=10.0,
+                    max_value=100.0,
+                    value=float(st.session_state.config_global.get('parametros_mononuclear', {}).get('a', 42.12)),
+                    step=0.01,
+                    help="Altura máxima teórica",
+                    key="mono_a"
+                )
+
+            with col2:
+                mono_b = st.number_input(
+                    "b - Parâmetro de intercepto",
+                    min_value=0.1,
+                    max_value=2.0,
+                    value=float(st.session_state.config_global.get('parametros_mononuclear', {}).get('b', 1.00)),
+                    step=0.01,
+                    help="Intercepto do modelo mononuclear",
+                    key="mono_b"
+                )
+
+            with col3:
+                mono_c = st.number_input(
+                    "c - Taxa de decaimento",
+                    min_value=0.01,
+                    max_value=1.0,
+                    value=float(st.session_state.config_global.get('parametros_mononuclear', {}).get('c', 0.10)),
+                    step=0.01,
+                    help="Taxa de decaimento exponencial",
+                    key="mono_c"
+                )
+
+        # Salvar parâmetros configurados
+        parametros_modelos = {
+            'parametros_chapman': {
+                'b0': chapman_b0,
+                'b1': chapman_b1,
+                'b2': chapman_b2
+            },
+            'parametros_weibull': {
+                'a': weibull_a,
+                'b': weibull_b,
+                'c': weibull_c
+            },
+            'parametros_mononuclear': {
+                'a': mono_a,
+                'b': mono_b,
+                'c': mono_c
+            }
+        }
+
+        # Preview dos parâmetros
+        with st.expander("👀 Preview dos Parâmetros Configurados"):
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.write("**Chapman:**")
+                st.write(f"• b₀ = {chapman_b0:.2f}")
+                st.write(f"• b₁ = {chapman_b1:.3f}")
+                st.write(f"• b₂ = {chapman_b2:.2f}")
+
+            with col2:
+                st.write("**Weibull:**")
+                st.write(f"• a = {weibull_a:.2f}")
+                st.write(f"• b = {weibull_b:.3f}")
+                st.write(f"• c = {weibull_c:.2f}")
+
+            with col3:
+                st.write("**Mononuclear:**")
+                st.write(f"• a = {mono_a:.2f}")
+                st.write(f"• b = {mono_b:.2f}")
+                st.write(f"• c = {mono_c:.2f}")
+
+    else:
+        # Se não incluir não-lineares, usar parâmetros padrão
+        parametros_modelos = {
+            'parametros_chapman': {'b0': 42.12, 'b1': 0.01, 'b2': 1.00},
+            'parametros_weibull': {'a': 42.12, 'b': 0.01, 'c': 1.00},
+            'parametros_mononuclear': {'a': 42.12, 'b': 1.00, 'c': 0.10}
+        }
+
+    # Retornar todas as configurações
     return {
         'incluir_nao_lineares': incluir_nao_lineares,
         'max_iteracoes': max_iteracoes,
-        'tolerancia_ajuste': tolerancia_ajuste
+        'tolerancia_ajuste': tolerancia_ajuste,
+        **parametros_modelos
+    }
+
+
+def obter_parametros_modelo_nao_linear(nome_modelo):
+    """
+    NOVA: Obtém parâmetros iniciais para um modelo não-linear específico
+
+    Args:
+        nome_modelo: 'Chapman', 'Weibull', ou 'Mononuclear'
+
+    Returns:
+        dict: Parâmetros iniciais para o modelo
+    """
+    config = obter_configuracao_global()
+
+    parametros_map = {
+        'Chapman': config.get('parametros_chapman', {'b0': 42.12, 'b1': 0.01, 'b2': 1.00}),
+        'Weibull': config.get('parametros_weibull', {'a': 42.12, 'b': 0.01, 'c': 1.00}),
+        'Mononuclear': config.get('parametros_mononuclear', {'a': 42.12, 'b': 1.00, 'c': 0.10})
+    }
+
+    return parametros_map.get(nome_modelo, {})
+
+
+def validar_parametros_nao_lineares():
+    """
+    NOVA: Valida se os parâmetros não-lineares são adequados
+
+    Returns:
+        dict: {'valido': bool, 'avisos': list, 'erros': list}
+    """
+    config = obter_configuracao_global()
+
+    avisos = []
+    erros = []
+
+    if config.get('incluir_nao_lineares', True):
+        # Validar Chapman
+        chapman = config.get('parametros_chapman', {})
+        if chapman.get('b0', 0) < 10:
+            avisos.append("Chapman: Altura assintótica muito baixa (< 10m)")
+        if chapman.get('b1', 0) > 0.5:
+            avisos.append("Chapman: Taxa de crescimento muito alta (> 0.5)")
+
+        # Validar Weibull
+        weibull = config.get('parametros_weibull', {})
+        if weibull.get('a', 0) < 10:
+            avisos.append("Weibull: Altura assintótica muito baixa (< 10m)")
+        if weibull.get('c', 0) > 3:
+            avisos.append("Weibull: Parâmetro de forma muito alto (> 3)")
+
+        # Validar Mononuclear
+        mono = config.get('parametros_mononuclear', {})
+        if mono.get('a', 0) < 10:
+            avisos.append("Mononuclear: Altura assintótica muito baixa (< 10m)")
+        if mono.get('b', 0) < 0.5:
+            avisos.append("Mononuclear: Parâmetro de intercepto muito baixo (< 0.5)")
+
+    return {
+        'valido': len(erros) == 0,
+        'avisos': avisos,
+        'erros': erros
+    }
+
+
+def mostrar_validacao_parametros():
+    """NOVA: Mostra validação dos parâmetros configurados"""
+    validacao = validar_parametros_nao_lineares()
+
+    if validacao['valido']:
+        st.success("✅ Parâmetros válidos!")
+
+    if validacao['avisos']:
+        st.warning("⚠️ **Avisos sobre os parâmetros:**")
+        for aviso in validacao['avisos']:
+            st.warning(f"• {aviso}")
+
+    if validacao['erros']:
+        st.error("❌ **Erros nos parâmetros:**")
+        for erro in validacao['erros']:
+            st.error(f"• {erro}")
+
+
+def resetar_parametros_padrao():
+    """NOVA: Reseta parâmetros para valores padrão recomendados"""
+    if st.button("🔄 Resetar para Valores Padrão", key="reset_parametros"):
+        st.session_state.config_global.update({
+            'parametros_chapman': {'b0': 42.12, 'b1': 0.01, 'b2': 1.00},
+            'parametros_weibull': {'a': 42.12, 'b': 0.01, 'c': 1.00},
+            'parametros_mononuclear': {'a': 42.12, 'b': 1.00, 'c': 0.10}
+        })
+        st.success("✅ Parâmetros resetados para valores padrão!")
+        st.rerun()
+
+
+def exportar_parametros_nao_lineares():
+    """NOVA: Exporta apenas os parâmetros dos modelos não-lineares"""
+    config = obter_configuracao_global()
+
+    parametros_export = {
+        'chapman': config.get('parametros_chapman', {}),
+        'weibull': config.get('parametros_weibull', {}),
+        'mononuclear': config.get('parametros_mononuclear', {}),
+        'configuracoes_modelo': {
+            'incluir_nao_lineares': config.get('incluir_nao_lineares', True),
+            'max_iteracoes': config.get('max_iteracoes', 5000),
+            'tolerancia_ajuste': config.get('tolerancia_ajuste', 0.01)
+        },
+        'timestamp': pd.Timestamp.now().isoformat()
+    }
+
+    import json
+    return json.dumps(parametros_export, indent=2, ensure_ascii=False)
+
+
+# NOVA FUNÇÃO: Para ser usada na Etapa 1 (Hipsométricos)
+def aplicar_parametros_nao_lineares_etapa1():
+    """
+    Aplica parâmetros não-lineares na Etapa 1
+    Para ser importada e usada em pages/1_🌳_Modelos_Hipsométricos.py
+    """
+    config = obter_configuracao_global()
+
+    if not config.get('incluir_nao_lineares', True):
+        return None
+
+    # Retornar configurações completas para modelos não-lineares
+    return {
+        'chapman_params': config.get('parametros_chapman', {'b0': 42.12, 'b1': 0.01, 'b2': 1.00}),
+        'weibull_params': config.get('parametros_weibull', {'a': 42.12, 'b': 0.01, 'c': 1.00}),
+        'mononuclear_params': config.get('parametros_mononuclear', {'a': 42.12, 'b': 1.00, 'c': 0.10}),
+        'max_iteracoes': config.get('max_iteracoes', 5000),
+        'tolerancia': config.get('tolerancia_ajuste', 0.01)
     }
 
 
