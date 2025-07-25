@@ -1,7 +1,11 @@
-# pages/0_⚙️_Configurações.py
+# pages/0_⚙️_Configurações.py - VERSÃO CORRIGIDA
 """
-Página de Configurações Globais
+Página de Configurações Globais - CORRIGIDA
 Centraliza todas as configurações do sistema em um local único
+CORREÇÕES:
+1. Removida aba de debug desnecessária
+2. Removida aba duplicada de parâmetros não-lineares
+3. Corrigido problema do shapefile não aparecer na lista
 """
 
 import streamlit as st
@@ -50,7 +54,7 @@ def mostrar_introducao():
     - **🔍 Filtros de Dados**: Aplicados em todas as 3 etapas
     - **📏 Áreas dos Talhões**: Usadas no inventário final  
     - **🌱 Parâmetros Florestais**: Para cálculos de biomassa e carbono
-    - **🧮 Configurações de Modelos**: Ajustes avançados dos algoritmos
+    - **🧮 Configurações de Modelos**: Ajustes avançados dos algoritmos (incluindo parâmetros não-lineares)
 
     > **💡 Vantagem**: Configure uma vez, use em todas as etapas automaticamente!
     """)
@@ -81,6 +85,7 @@ def mostrar_impacto_configuracao():
             - ✅ Modelos não-lineares
             - ✅ Máximo iterações
             - ✅ Tolerância ajuste
+            - ✅ Parâmetros iniciais (Chapman, Weibull, Mononuclear)
             """)
 
         with col2:
@@ -125,6 +130,92 @@ def mostrar_aviso_impacto():
 
         **Recomendação**: Execute novamente as etapas para aplicar as novas configurações.
         """)
+
+
+def verificar_arquivos_opcionais():
+    """
+    CORREÇÃO 3: Função dedicada para verificar arquivos opcionais de forma mais robusta
+
+    Returns:
+        dict: Status dos arquivos opcionais
+    """
+    status_arquivos = {
+        'shapefile_disponivel': False,
+        'coordenadas_disponivel': False,
+        'shapefile_nome': None,
+        'coordenadas_nome': None
+    }
+
+    # Verificar shapefile de múltiplas formas
+    shapefile_encontrado = False
+    shapefile_nome = None
+
+    # 1. Verificar upload atual na sessão
+    if hasattr(st.session_state, 'arquivo_shapefile'):
+        if st.session_state.arquivo_shapefile is not None:
+            shapefile_encontrado = True
+            shapefile_nome = st.session_state.arquivo_shapefile.name
+
+    # 2. Verificar se foi carregado via file_uploader (pode estar em outros states)
+    for key in st.session_state.keys():
+        if 'shapefile' in key.lower() and st.session_state[key] is not None:
+            if hasattr(st.session_state[key], 'name'):
+                shapefile_encontrado = True
+                shapefile_nome = st.session_state[key].name
+                break
+
+    # Verificar coordenadas de múltiplas formas
+    coordenadas_encontradas = False
+    coordenadas_nome = None
+
+    # 1. Verificar upload atual na sessão
+    if hasattr(st.session_state, 'arquivo_coordenadas'):
+        if st.session_state.arquivo_coordenadas is not None:
+            coordenadas_encontradas = True
+            coordenadas_nome = st.session_state.arquivo_coordenadas.name
+
+    # 2. Verificar se foi carregado via file_uploader (pode estar em outros states)
+    for key in st.session_state.keys():
+        if 'coordenadas' in key.lower() and st.session_state[key] is not None:
+            if hasattr(st.session_state[key], 'name'):
+                coordenadas_encontradas = True
+                coordenadas_nome = st.session_state[key].name
+                break
+
+    status_arquivos.update({
+        'shapefile_disponivel': shapefile_encontrado,
+        'coordenadas_disponivel': coordenadas_encontradas,
+        'shapefile_nome': shapefile_nome,
+        'coordenadas_nome': coordenadas_nome
+    })
+
+    return status_arquivos
+
+
+def mostrar_status_arquivos_opcionais():
+    """Mostra status dos arquivos opcionais de forma clara"""
+    status = verificar_arquivos_opcionais()
+
+    with st.expander("📁 Status dos Arquivos Opcionais"):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if status['shapefile_disponivel']:
+                st.success(f"✅ **Shapefile detectado**")
+                st.info(f"📄 {status['shapefile_nome']}")
+                st.caption("Método 'Upload shapefile' disponível")
+            else:
+                st.warning("⚠️ **Shapefile não carregado**")
+                st.caption("Upload na página principal para habilitar")
+
+        with col2:
+            if status['coordenadas_disponivel']:
+                st.success(f"✅ **Coordenadas detectadas**")
+                st.info(f"📄 {status['coordenadas_nome']}")
+                st.caption("Método 'Coordenadas das parcelas' disponível")
+            else:
+                st.warning("⚠️ **Coordenadas não carregadas**")
+                st.caption("Upload na página principal para habilitar")
 
 
 def mostrar_navegacao_rapida():
@@ -177,6 +268,9 @@ def main():
     # Mostrar como configurações afetam etapas
     mostrar_impacto_configuracao()
 
+    # CORREÇÃO 3: Mostrar status dos arquivos opcionais
+    mostrar_status_arquivos_opcionais()
+
     # Aviso sobre impacto das mudanças
     mostrar_aviso_impacto()
 
@@ -203,6 +297,7 @@ def main():
         - **Diâmetro mínimo**: Impacta número de árvores consideradas
         - **Método de área**: Define como calcular estoques por talhão
         - **Modelos não-lineares**: Aumenta tempo de processamento mas pode melhorar precisão
+        - **Parâmetros iniciais**: Fundamentais para convergência dos modelos não-lineares
 
         ### 💾 **Persistência**
 
@@ -215,6 +310,13 @@ def main():
         - Mudanças nas configurações invalidam resultados anteriores
         - Filtros muito restritivos podem reduzir drasticamente os dados
         - Configurações de área impactam diretamente os estoques calculados
+        - Parâmetros inadequados podem impedir convergência dos modelos não-lineares
+
+        ### 📁 **Arquivos Opcionais**
+
+        - **Shapefile**: Carregue na página principal para habilitar método "Upload shapefile"
+        - **Coordenadas**: Carregue na página principal para habilitar método "Coordenadas das parcelas"
+        - Estes arquivos ficam persistentes na sessão após o upload
         """)
 
 

@@ -1,7 +1,12 @@
-# config/configuracoes_globais.py
+# config/configuracoes_globais.py - VERSÃO CORRIGIDA
 """
-Configurações globais centralizadas para todo o sistema
+Configurações globais centralizadas para todo o sistema - CORRIGIDA
 Gerencia filtros e configurações compartilhadas entre todas as etapas
+
+CORREÇÕES:
+1. Removida aba duplicada de parâmetros não-lineares
+2. Corrigido problema do shapefile não aparecer na lista
+3. Removidas funções de debug desnecessárias
 """
 
 import streamlit as st
@@ -30,36 +35,26 @@ def inicializar_configuracoes_globais():
             'densidade_madeira': 500,
             'idade_padrao': 5.0,
 
-            # Configurações de modelos
+            # Configurações de modelos (incluindo parâmetros não-lineares)
             'incluir_nao_lineares': True,
             'max_iteracoes': 5000,
             'tolerancia_ajuste': 0.01,
 
-            # NOVO: Parâmetros iniciais para modelos não-lineares hipsométricos
+            # Parâmetros iniciais para modelos não-lineares hipsométricos
             'parametros_chapman': {
                 'b0': 42.12,  # Altura assintótica
-                'b1': 0.01,   # Taxa de crescimento
-                'b2': 1.00    # Parâmetro de forma
+                'b1': 0.01,  # Taxa de crescimento
+                'b2': 1.00  # Parâmetro de forma
             },
             'parametros_weibull': {
-                'a': 42.12,   # Altura assintótica
-                'b': 0.01,    # Parâmetro de escala
-                'c': 1.00     # Parâmetro de forma
+                'a': 42.12,  # Altura assintótica
+                'b': 0.01,  # Parâmetro de escala
+                'c': 1.00  # Parâmetro de forma
             },
             'parametros_mononuclear': {
-                'a': 42.12,   # Altura assintótica
-                'b': 1.00,    # Parâmetro de intercepto
-                'c': 0.10     # Taxa de decaimento
-            },
-
-            # NOVO: Parâmetros iniciais para modelos volumétricos não-lineares (se houver)
-            'parametros_vol_nao_lineares': {
-                'enabled': False,  # Por padrão volumétricos são lineares
-                'modelo_customizado': {
-                    'param1': 1.0,
-                    'param2': 0.1,
-                    'param3': 1.0
-                }
+                'a': 42.12,  # Altura assintótica
+                'b': 1.00,  # Parâmetro de intercepto
+                'c': 0.10  # Taxa de decaimento
             },
 
             # Estado de configuração
@@ -70,7 +65,7 @@ def inicializar_configuracoes_globais():
 
 def limpar_tipos_nao_serializaveis(config):
     """
-    NOVA FUNÇÃO: Limpa tipos não-serializáveis das configurações
+    Limpa tipos não-serializáveis das configurações
 
     Args:
         config: Configurações a serem limpas
@@ -106,9 +101,69 @@ def limpar_tipos_nao_serializaveis(config):
     return converter_recursivo(config)
 
 
+def verificar_arquivos_opcionais_disponiveis():
+    """
+    CORREÇÃO 2: Função robusta para verificar disponibilidade de arquivos opcionais
+
+    Returns:
+        dict: Status dos arquivos opcionais
+    """
+    arquivos_status = {
+        'shapefile_disponivel': False,
+        'coordenadas_disponivel': False
+    }
+
+    # Verificar shapefile - múltiplas estratégias
+    try:
+        # Estratégia 1: Verificar atributo direto
+        if hasattr(st.session_state, 'arquivo_shapefile'):
+            if st.session_state.arquivo_shapefile is not None:
+                arquivos_status['shapefile_disponivel'] = True
+
+        # Estratégia 2: Buscar em todas as keys que contenham 'shapefile'
+        if not arquivos_status['shapefile_disponivel']:
+            for key in st.session_state.keys():
+                if 'shapefile' in key.lower():
+                    valor = st.session_state[key]
+                    if valor is not None and hasattr(valor, 'name'):
+                        arquivos_status['shapefile_disponivel'] = True
+                        # Atualizar referência principal se necessário
+                        if not hasattr(st.session_state, 'arquivo_shapefile'):
+                            st.session_state.arquivo_shapefile = valor
+                        break
+
+    except Exception as e:
+        st.sidebar.warning(f"Erro ao verificar shapefile: {e}")
+
+    # Verificar coordenadas - múltiplas estratégias
+    try:
+        # Estratégia 1: Verificar atributo direto
+        if hasattr(st.session_state, 'arquivo_coordenadas'):
+            if st.session_state.arquivo_coordenadas is not None:
+                arquivos_status['coordenadas_disponivel'] = True
+
+        # Estratégia 2: Buscar em todas as keys que contenham 'coordenadas'
+        if not arquivos_status['coordenadas_disponivel']:
+            for key in st.session_state.keys():
+                if 'coordenadas' in key.lower():
+                    valor = st.session_state[key]
+                    if valor is not None and hasattr(valor, 'name'):
+                        arquivos_status['coordenadas_disponivel'] = True
+                        # Atualizar referência principal se necessário
+                        if not hasattr(st.session_state, 'arquivo_coordenadas'):
+                            st.session_state.arquivo_coordenadas = valor
+                        break
+
+    except Exception as e:
+        st.sidebar.warning(f"Erro ao verificar coordenadas: {e}")
+
+    return arquivos_status
+
+
 def mostrar_configuracoes_globais():
     """
-    Interface unificada para todas as configurações do sistema - VERSÃO COM PARÂMETROS NÃO-LINEARES
+    Interface unificada para todas as configurações do sistema - VERSÃO CORRIGIDA
+    CORREÇÃO 1: Removida aba duplicada de parâmetros não-lineares
     """
     st.header("⚙️ Configurações Globais do Sistema")
     st.info("💡 Estas configurações se aplicam a todas as etapas da análise")
@@ -120,13 +175,12 @@ def mostrar_configuracoes_globais():
 
     df_inventario = st.session_state.dados_inventario
 
-    # Criar abas para organizar configurações - ADICIONANDO ABA DE PARÂMETROS
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # CORREÇÃO 1: Criar apenas 4 abas (removida aba duplicada)
+    tab1, tab2, tab3, tab4 = st.tabs([
         "🔍 Filtros de Dados",
         "📏 Áreas dos Talhões",
         "🌱 Parâmetros Florestais",
-        "🧮 Configurações de Modelos",
-        "🔧 Parâmetros Não-Lineares"  # NOVA ABA
+        "🧮 Configurações de Modelos"  # Esta aba já inclui parâmetros não-lineares
     ])
 
     with tab1:
@@ -141,26 +195,7 @@ def mostrar_configuracoes_globais():
     with tab4:
         config_modelos = configurar_modelos_avancados()
 
-    with tab5:  # NOVA ABA
-        st.subheader("🔧 Parâmetros de Modelos Não-Lineares")
-        st.info("⚙️ Estes parâmetros são usados como valores iniciais para os modelos Chapman, Weibull e Mononuclear")
-
-        # Mostrar validação
-        mostrar_validacao_parametros()
-
-        # Botão para resetar
-        resetar_parametros_padrao()
-
-        # Download específico dos parâmetros
-        st.download_button(
-            "📥 Exportar Parâmetros Não-Lineares",
-            data=exportar_parametros_nao_lineares(),
-            file_name="parametros_nao_lineares.json",
-            mime="application/json",
-            key="download_parametros_nao_lineares"
-        )
-
-    # Combinar todas as configurações (config_modelos já inclui os parâmetros)
+    # Combinar todas as configurações
     config_completa = {
         **st.session_state.config_global,
         **config_filtros,
@@ -245,63 +280,26 @@ def configurar_areas_talhoes(df_inventario):
     """Configurações de áreas dos talhões - VERSÃO CORRIGIDA"""
     st.subheader("📏 Configuração de Áreas")
 
-    # CORREÇÃO: Verificar arquivos de forma mais robusta
+    # CORREÇÃO 2: Verificar arquivos usando função robusta
+    arquivos_status = verificar_arquivos_opcionais_disponiveis()
+
     metodos_disponiveis = ["Simular automaticamente", "Valores específicos por talhão"]
 
-    # Debug: Mostrar status dos arquivos
-    with st.expander("🔍 Debug - Status dos Arquivos"):
-        st.write("**Verificando arquivos disponíveis:**")
-
-        # Verificar shapefile
-        shapefile_disponivel = False
-        if hasattr(st.session_state, 'arquivo_shapefile'):
-            if st.session_state.arquivo_shapefile is not None:
-                shapefile_disponivel = True
-                st.success(f"✅ Shapefile detectado: {st.session_state.arquivo_shapefile.name}")
-            else:
-                st.info("ℹ️ Shapefile não carregado")
-        else:
-            st.info("ℹ️ Atributo 'arquivo_shapefile' não existe no session_state")
-
-        # Verificar coordenadas
-        coordenadas_disponivel = False
-        if hasattr(st.session_state, 'arquivo_coordenadas'):
-            if st.session_state.arquivo_coordenadas is not None:
-                coordenadas_disponivel = True
-                st.success(f"✅ Coordenadas detectadas: {st.session_state.arquivo_coordenadas.name}")
-            else:
-                st.info("ℹ️ Arquivo de coordenadas não carregado")
-        else:
-            st.info("ℹ️ Atributo 'arquivo_coordenadas' não existe no session_state")
-
-        # Mostrar todos os atributos do session_state relacionados a arquivos
-        st.write("**Todos os atributos do session_state:**")
-        arquivo_attrs = {k: v for k, v in st.session_state.items() if 'arquivo' in k.lower()}
-        if arquivo_attrs:
-            for k, v in arquivo_attrs.items():
-                st.write(f"- {k}: {type(v)} = {v is not None}")
-        else:
-            st.write("Nenhum atributo relacionado a 'arquivo' encontrado")
-
-    # Adicionar métodos baseado nos arquivos disponíveis
-    if shapefile_disponivel:
+    # CORREÇÃO 2: Adicionar métodos baseado na verificação robusta
+    if arquivos_status['shapefile_disponivel']:
         metodos_disponiveis.append("Upload shapefile")
-        st.info("📁 Método 'Upload shapefile' adicionado")
+        st.success("📁 Shapefile detectado - Método 'Upload shapefile' disponível")
 
-    if coordenadas_disponivel:
+    if arquivos_status['coordenadas_disponivel']:
         metodos_disponiveis.append("Coordenadas das parcelas")
-        st.info("📍 Método 'Coordenadas das parcelas' adicionado")
+        st.success("📍 Coordenadas detectadas - Método 'Coordenadas das parcelas' disponível")
 
-    # Se nenhum arquivo adicional foi detectado, mostrar aviso
-    if not shapefile_disponivel and not coordenadas_disponivel:
-        st.warning("""
-        ⚠️ **Arquivos adicionais não detectados**
-
-        Para usar métodos avançados de área:
-        - Upload um shapefile para usar "Upload shapefile"
-        - Upload coordenadas das parcelas para usar "Coordenadas das parcelas"
-
-        **Verifique se os arquivos foram carregados na página principal**
+    # Se nenhum arquivo adicional foi detectado, mostrar informação
+    if not arquivos_status['shapefile_disponivel'] and not arquivos_status['coordenadas_disponivel']:
+        st.info("""
+        💡 **Para habilitar métodos avançados de área:**
+        - Upload um shapefile na página principal para usar "Upload shapefile"
+        - Upload coordenadas das parcelas na página principal para usar "Coordenadas das parcelas"
         """)
 
     col1, col2, col3 = st.columns(3)
@@ -356,6 +354,7 @@ def configurar_areas_talhoes(df_inventario):
         'raio_parcela': raio_parcela,
         'areas_manuais': areas_manuais
     }
+
 
 def configurar_areas_manuais_global(df_inventario):
     """Interface para áreas manuais - VERSÃO CORRIGIDA"""
@@ -468,7 +467,10 @@ def configurar_parametros_florestais():
 
 
 def configurar_modelos_avancados():
-    """Configurações avançadas de modelos - VERSÃO COM PARÂMETROS NÃO-LINEARES"""
+    """
+    CORREÇÃO 1: Configurações avançadas de modelos incluindo parâmetros não-lineares
+    Esta função agora inclui TUDO sobre configuração de modelos em uma única aba
+    """
     st.subheader("🧮 Configurações de Modelos")
 
     # Configurações básicas
@@ -502,10 +504,12 @@ def configurar_modelos_avancados():
             key="global_tolerancia_ajuste"
         )
 
-    # NOVO: Configuração de parâmetros iniciais para modelos não-lineares
+    # CORREÇÃO 1: Incluir configuração de parâmetros iniciais diretamente nesta aba
+    parametros_modelos = {}
+
     if incluir_nao_lineares:
         st.markdown("---")
-        st.subheader("🔧 Configuração de Parâmetros Iniciais")
+        st.markdown("### 🔧 Parâmetros Iniciais dos Modelos Não-Lineares")
         st.info("⚙️ Configure os valores iniciais para os modelos não-lineares (importante para convergência)")
 
         # Abas para cada modelo não-linear
@@ -673,6 +677,16 @@ def configurar_modelos_avancados():
                 st.write(f"• b = {mono_b:.2f}")
                 st.write(f"• c = {mono_c:.2f}")
 
+        # Botão para resetar parâmetros
+        if st.button("🔄 Resetar Parâmetros para Valores Padrão", key="reset_parametros_modelos"):
+            st.session_state.config_global.update({
+                'parametros_chapman': {'b0': 42.12, 'b1': 0.01, 'b2': 1.00},
+                'parametros_weibull': {'a': 42.12, 'b': 0.01, 'c': 1.00},
+                'parametros_mononuclear': {'a': 42.12, 'b': 1.00, 'c': 0.10}
+            })
+            st.success("✅ Parâmetros resetados para valores padrão!")
+            st.rerun()
+
     else:
         # Se não incluir não-lineares, usar parâmetros padrão
         parametros_modelos = {
@@ -687,139 +701,6 @@ def configurar_modelos_avancados():
         'max_iteracoes': max_iteracoes,
         'tolerancia_ajuste': tolerancia_ajuste,
         **parametros_modelos
-    }
-
-
-def obter_parametros_modelo_nao_linear(nome_modelo):
-    """
-    NOVA: Obtém parâmetros iniciais para um modelo não-linear específico
-
-    Args:
-        nome_modelo: 'Chapman', 'Weibull', ou 'Mononuclear'
-
-    Returns:
-        dict: Parâmetros iniciais para o modelo
-    """
-    config = obter_configuracao_global()
-
-    parametros_map = {
-        'Chapman': config.get('parametros_chapman', {'b0': 42.12, 'b1': 0.01, 'b2': 1.00}),
-        'Weibull': config.get('parametros_weibull', {'a': 42.12, 'b': 0.01, 'c': 1.00}),
-        'Mononuclear': config.get('parametros_mononuclear', {'a': 42.12, 'b': 1.00, 'c': 0.10})
-    }
-
-    return parametros_map.get(nome_modelo, {})
-
-
-def validar_parametros_nao_lineares():
-    """
-    NOVA: Valida se os parâmetros não-lineares são adequados
-
-    Returns:
-        dict: {'valido': bool, 'avisos': list, 'erros': list}
-    """
-    config = obter_configuracao_global()
-
-    avisos = []
-    erros = []
-
-    if config.get('incluir_nao_lineares', True):
-        # Validar Chapman
-        chapman = config.get('parametros_chapman', {})
-        if chapman.get('b0', 0) < 10:
-            avisos.append("Chapman: Altura assintótica muito baixa (< 10m)")
-        if chapman.get('b1', 0) > 0.5:
-            avisos.append("Chapman: Taxa de crescimento muito alta (> 0.5)")
-
-        # Validar Weibull
-        weibull = config.get('parametros_weibull', {})
-        if weibull.get('a', 0) < 10:
-            avisos.append("Weibull: Altura assintótica muito baixa (< 10m)")
-        if weibull.get('c', 0) > 3:
-            avisos.append("Weibull: Parâmetro de forma muito alto (> 3)")
-
-        # Validar Mononuclear
-        mono = config.get('parametros_mononuclear', {})
-        if mono.get('a', 0) < 10:
-            avisos.append("Mononuclear: Altura assintótica muito baixa (< 10m)")
-        if mono.get('b', 0) < 0.5:
-            avisos.append("Mononuclear: Parâmetro de intercepto muito baixo (< 0.5)")
-
-    return {
-        'valido': len(erros) == 0,
-        'avisos': avisos,
-        'erros': erros
-    }
-
-
-def mostrar_validacao_parametros():
-    """NOVA: Mostra validação dos parâmetros configurados"""
-    validacao = validar_parametros_nao_lineares()
-
-    if validacao['valido']:
-        st.success("✅ Parâmetros válidos!")
-
-    if validacao['avisos']:
-        st.warning("⚠️ **Avisos sobre os parâmetros:**")
-        for aviso in validacao['avisos']:
-            st.warning(f"• {aviso}")
-
-    if validacao['erros']:
-        st.error("❌ **Erros nos parâmetros:**")
-        for erro in validacao['erros']:
-            st.error(f"• {erro}")
-
-
-def resetar_parametros_padrao():
-    """NOVA: Reseta parâmetros para valores padrão recomendados"""
-    if st.button("🔄 Resetar para Valores Padrão", key="reset_parametros"):
-        st.session_state.config_global.update({
-            'parametros_chapman': {'b0': 42.12, 'b1': 0.01, 'b2': 1.00},
-            'parametros_weibull': {'a': 42.12, 'b': 0.01, 'c': 1.00},
-            'parametros_mononuclear': {'a': 42.12, 'b': 1.00, 'c': 0.10}
-        })
-        st.success("✅ Parâmetros resetados para valores padrão!")
-        st.rerun()
-
-
-def exportar_parametros_nao_lineares():
-    """NOVA: Exporta apenas os parâmetros dos modelos não-lineares"""
-    config = obter_configuracao_global()
-
-    parametros_export = {
-        'chapman': config.get('parametros_chapman', {}),
-        'weibull': config.get('parametros_weibull', {}),
-        'mononuclear': config.get('parametros_mononuclear', {}),
-        'configuracoes_modelo': {
-            'incluir_nao_lineares': config.get('incluir_nao_lineares', True),
-            'max_iteracoes': config.get('max_iteracoes', 5000),
-            'tolerancia_ajuste': config.get('tolerancia_ajuste', 0.01)
-        },
-        'timestamp': pd.Timestamp.now().isoformat()
-    }
-
-    import json
-    return json.dumps(parametros_export, indent=2, ensure_ascii=False)
-
-
-# NOVA FUNÇÃO: Para ser usada na Etapa 1 (Hipsométricos)
-def aplicar_parametros_nao_lineares_etapa1():
-    """
-    Aplica parâmetros não-lineares na Etapa 1
-    Para ser importada e usada em pages/1_🌳_Modelos_Hipsométricos.py
-    """
-    config = obter_configuracao_global()
-
-    if not config.get('incluir_nao_lineares', True):
-        return None
-
-    # Retornar configurações completas para modelos não-lineares
-    return {
-        'chapman_params': config.get('parametros_chapman', {'b0': 42.12, 'b1': 0.01, 'b2': 1.00}),
-        'weibull_params': config.get('parametros_weibull', {'a': 42.12, 'b': 0.01, 'c': 1.00}),
-        'mononuclear_params': config.get('parametros_mononuclear', {'a': 42.12, 'b': 1.00, 'c': 0.10}),
-        'max_iteracoes': config.get('max_iteracoes', 5000),
-        'tolerancia': config.get('tolerancia_ajuste', 0.01)
     }
 
 
@@ -896,18 +777,34 @@ def mostrar_resumo_configuracoes_completas(config, df_inventario):
             st.write(f"- Não-lineares: {'Sim' if config['incluir_nao_lineares'] else 'Não'}")
             st.write(f"- Max iterações: {config['max_iteracoes']}")
 
+        # Calcular impacto dos filtros
+        try:
+            df_original = df_inventario
+            df_filtrado = aplicar_filtros_configuracao_global(df_original)
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Registros Originais", len(df_original))
+            with col2:
+                st.metric("Após Filtros", len(df_filtrado))
+            with col3:
+                percentual = (len(df_filtrado) / len(df_original)) * 100 if len(df_original) > 0 else 0
+                st.metric("% Mantido", f"{percentual:.1f}%")
+
+        except Exception as e:
+            st.info("Calcule o impacto executando as configurações")
+
 
 def mostrar_botoes_configuracao_globais(config):
-    """Botões de ação para configurações - VERSÃO DEBUGADA"""
-    import json  # CORREÇÃO: Adicionar import
-    import pandas as pd  # CORREÇÃO: Adicionar import pandas
+    """Botões de ação para configurações"""
+    import json
+    import pandas as pd
 
     st.markdown("---")
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
         if st.button("💾 Salvar Configurações", use_container_width=True):
-            # Limpar antes de salvar
             config_limpa = limpar_tipos_nao_serializaveis(config)
             st.session_state.config_global = config_limpa
             st.success("✅ Configurações salvas!")
@@ -918,13 +815,7 @@ def mostrar_botoes_configuracao_globais(config):
             st.rerun()
 
     with col3:
-        # DEBUG: Mostrar tipos problemáticos antes da exportação
         try:
-            with st.expander("🔍 Debug Config"):
-                st.write("Tipos detectados:")
-                for k, v in config.items():
-                    st.write(f"- {k}: {type(v)} = {v}")
-
             config_json = exportar_configuracoes_globais(config)
             st.download_button(
                 "📁 Exportar",
@@ -935,27 +826,6 @@ def mostrar_botoes_configuracao_globais(config):
             )
         except Exception as e:
             st.error(f"❌ Erro na exportação: {e}")
-            st.write("🔍 Tentando exportação simplificada...")
-
-            # Exportação de emergência
-            config_emergencia = {
-                'timestamp': pd.Timestamp.now().isoformat(),
-                'erro': str(e),
-                'configuracoes_basicas': 'Erro na serialização'
-            }
-
-            try:
-                config_json_emergencia = json.dumps(config_emergencia, indent=2, ensure_ascii=False)
-                st.download_button(
-                    "📁 Exportar (Emergência)",
-                    data=config_json_emergencia,
-                    file_name="configuracoes_emergencia.json",
-                    mime="application/json",
-                    use_container_width=True,
-                    key="download_emergencia"
-                )
-            except Exception as e2:
-                st.error(f"❌ Erro crítico: {e2}")
 
     with col4:
         if st.button("🎯 Aplicar a Todas Etapas", use_container_width=True):
@@ -963,15 +833,50 @@ def mostrar_botoes_configuracao_globais(config):
             st.success("✅ Configurações aplicadas!")
 
 
+def mostrar_info_coordenadas():
+    """Mostra informações sobre arquivo de coordenadas"""
+    st.info("""
+    📍 **Método: Coordenadas das Parcelas**
+
+    - Arquivo de coordenadas detectado
+    - Áreas serão calculadas baseadas nas coordenadas das parcelas
+    - Método mais preciso quando coordenadas GPS estão disponíveis
+    """)
+
+    # Tentar mostrar preview se possível
+    if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas:
+        try:
+            import pandas as pd
+            df_coords = pd.read_csv(st.session_state.arquivo_coordenadas)
+            st.write("**Preview do arquivo de coordenadas:**")
+            st.dataframe(df_coords.head(3))
+        except Exception as e:
+            st.warning(f"Não foi possível visualizar o arquivo: {e}")
+
+
+def mostrar_info_shapefile():
+    """Mostra informações sobre shapefile"""
+    st.info("""
+    📁 **Método: Upload Shapefile**
+
+    - Shapefile detectado
+    - Áreas serão extraídas dos polígonos
+    - Método mais preciso para talhões irregulares
+    """)
+
+    if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile:
+        st.write(f"**Arquivo:** {st.session_state.arquivo_shapefile.name}")
+
+
 def exportar_configuracoes_globais(config):
-    """Exporta configurações em JSON - VERSÃO ULTRA ROBUSTA"""
+    """Exporta configurações em JSON - VERSÃO CORRIGIDA"""
     import json
     from datetime import datetime
     import numpy as np
     import pandas as pd
 
     class ConfigJSONEncoder(json.JSONEncoder):
-        """Encoder personalizado para configurações"""
+        """Encoder personalizado para lidar com tipos não serializáveis"""
 
         def default(self, obj):
             # Tipos NumPy
@@ -983,7 +888,6 @@ def exportar_configuracoes_globais(config):
                 return obj.tolist()
             elif isinstance(obj, np.bool_):
                 return bool(obj)
-
             # Tipos Pandas
             elif isinstance(obj, pd.Timestamp):
                 return obj.isoformat()
@@ -994,106 +898,41 @@ def exportar_configuracoes_globais(config):
                     return obj.item()
                 except:
                     return str(obj)
-
             # Outros tipos problemáticos
             elif hasattr(obj, '__dict__'):
                 return str(obj)
             else:
                 return super().default(obj)
 
-    def limpar_config_completa(obj):
-        """Limpeza mais agressiva das configurações"""
-        if isinstance(obj, dict):
-            resultado = {}
-            for k, v in obj.items():
-                try:
-                    # Tentar converter a chave
-                    if hasattr(k, 'item'):
-                        k = k.item()
-                    elif isinstance(k, (np.integer, np.int64)):
-                        k = int(k)
-
-                    # Converter o valor recursivamente
-                    resultado[str(k)] = limpar_config_completa(v)
-                except Exception as e:
-                    # Se falhar, usar string
-                    resultado[str(k)] = str(v)
-            return resultado
-
-        elif isinstance(obj, (list, tuple)):
-            resultado = []
-            for item in obj:
-                try:
-                    resultado.append(limpar_config_completa(item))
-                except Exception:
-                    resultado.append(str(item))
-            return resultado
-
-        # Conversões específicas
-        elif isinstance(obj, (np.integer, np.int64, np.int32, np.int16)):
-            return int(obj)
-        elif isinstance(obj, (np.floating, np.float64, np.float32)):
-            return float(obj)
-        elif isinstance(obj, np.bool_):
-            return bool(obj)
-        elif isinstance(obj, pd.Timestamp):
-            return obj.isoformat()
-        elif hasattr(obj, 'item'):
-            try:
-                return obj.item()
-            except:
-                return str(obj)
-        else:
-            return obj
-
     try:
-        # Primeira tentativa: limpar configurações
-        config_limpa = limpar_config_completa(config)
+        # Limpar config antes da exportação
+        config_limpo = limpar_tipos_nao_serializaveis(config)
 
         config_export = {
             'timestamp': datetime.now().isoformat(),
             'versao': '1.0',
-            'configuracoes': config_limpa
+            'configuracoes': config_limpo
         }
 
-        # Tentar serializar com encoder personalizado
         return json.dumps(config_export, cls=ConfigJSONEncoder, indent=2, ensure_ascii=False)
 
-    except Exception as e1:
-        st.warning(f"⚠️ Erro na serialização completa: {e1}")
+    except Exception as e:
+        st.error(f"❌ Erro na serialização: {e}")
 
-        try:
-            # Segunda tentativa: versão mais simples
-            config_basica = {
-                'timestamp': datetime.now().isoformat(),
-                'versao': '1.0',
-                'configuracoes_basicas': {
-                    'diametro_min': float(config.get('diametro_min', 4.0)) if config.get(
-                        'diametro_min') is not None else 4.0,
-                    'metodo_area': str(config.get('metodo_area', 'Simular automaticamente')),
-                    'area_parcela': float(config.get('area_parcela', 400)) if config.get(
-                        'area_parcela') is not None else 400,
-                    'configurado': bool(config.get('configurado', False)),
-                    'talhoes_excluir': [int(t) for t in config.get('talhoes_excluir', []) if t is not None],
-                    'codigos_excluir': [str(c) for c in config.get('codigos_excluir', []) if c is not None],
-                },
-                'observacao': 'Configurações básicas devido a erro de serialização'
+        # Fallback: exportar apenas configurações básicas
+        config_basico = {
+            'timestamp': datetime.now().isoformat(),
+            'versao': '1.0',
+            'erro': str(e),
+            'configuracoes_basicas': {
+                'diametro_min': float(config.get('diametro_min', 4.0)),
+                'metodo_area': str(config.get('metodo_area', 'Simular automaticamente')),
+                'area_parcela': float(config.get('area_parcela', 400)),
+                'configurado': bool(config.get('configurado', False))
             }
+        }
 
-            return json.dumps(config_basica, indent=2, ensure_ascii=False)
-
-        except Exception as e2:
-            st.error(f"❌ Erro crítico na serialização: {e2}")
-
-            # Terceira tentativa: mínima
-            config_minima = {
-                'timestamp': datetime.now().isoformat(),
-                'versao': '1.0',
-                'erro': f'Serialização falhou: {str(e1)} | {str(e2)}',
-                'status': 'Erro na exportação'
-            }
-
-            return json.dumps(config_minima, indent=2, ensure_ascii=False)
+        return json.dumps(config_basico, indent=2, ensure_ascii=False)
 
 
 def aplicar_configuracao_todas_etapas(config):
@@ -1189,143 +1028,3 @@ def mostrar_status_configuracao_sidebar():
         st.sidebar.warning("⚠️ Não configurado")
         if st.sidebar.button("⚙️ Configurar", use_container_width=True):
             st.switch_page("pages/0_⚙️_Configurações.py")
-
-
-def mostrar_info_coordenadas():
-    """Mostra informações sobre arquivo de coordenadas"""
-    st.info("""
-    📍 **Método: Coordenadas das Parcelas**
-
-    - Arquivo de coordenadas detectado
-    - Áreas serão calculadas baseadas nas coordenadas das parcelas
-    - Método mais preciso quando coordenadas GPS estão disponíveis
-    """)
-
-    # Tentar mostrar preview se possível
-    if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas:
-        try:
-            import pandas as pd
-            df_coords = pd.read_csv(st.session_state.arquivo_coordenadas)
-            st.write("**Preview do arquivo de coordenadas:**")
-            st.dataframe(df_coords.head(3))
-        except Exception as e:
-            st.warning(f"Não foi possível visualizar o arquivo: {e}")
-
-
-def mostrar_info_shapefile():
-    """Mostra informações sobre shapefile"""
-    st.info("""
-    📁 **Método: Upload Shapefile**
-
-    - Shapefile detectado
-    - Áreas serão extraídas dos polígonos
-    - Método mais preciso para talhões irregulares
-    """)
-
-    if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile:
-        st.write(f"**Arquivo:** {st.session_state.arquivo_shapefile.name}")
-
-
-# ADICIONAR FUNÇÃO PARA VERIFICAR UPLOAD DE ARQUIVOS NA SIDEBAR
-def verificar_uploads_arquivos():
-    """
-    Função para verificar se uploads adicionais foram realizados
-    Deve ser chamada na sidebar principal
-    """
-    st.sidebar.subheader("📎 Arquivos Adicionais")
-
-    # Upload de coordenadas
-    arquivo_coords = st.sidebar.file_uploader(
-        "📍 Coordenadas das Parcelas (CSV)",
-        type=['csv'],
-        help="Arquivo com coordenadas GPS das parcelas",
-        key="upload_coordenadas_sidebar"
-    )
-
-    if arquivo_coords is not None:
-        st.session_state.arquivo_coordenadas = arquivo_coords
-        st.sidebar.success(f"✅ Coordenadas: {arquivo_coords.name}")
-
-    # Upload de shapefile
-    arquivo_shape = st.sidebar.file_uploader(
-        "📁 Shapefile (ZIP)",
-        type=['zip', 'shp'],
-        help="Arquivo shapefile com polígonos dos talhões",
-        key="upload_shapefile_sidebar"
-    )
-
-    if arquivo_shape is not None:
-        st.session_state.arquivo_shapefile = arquivo_shape
-        st.sidebar.success(f"✅ Shapefile: {arquivo_shape.name}")
-
-    # Mostrar status
-    if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas:
-        st.sidebar.info(f"📍 Coordenadas ativas: {st.session_state.arquivo_coordenadas.name}")
-
-    if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile:
-        st.sidebar.info(f"📁 Shapefile ativo: {st.session_state.arquivo_shapefile.name}")
-
-
-# FUNÇÃO PARA CORRIGIR O PROBLEMA NO PRINCIPAL.PY
-def processar_uploads_corrigido(arquivos):
-    """
-    Versão corrigida do processamento de uploads no Principal.py
-    """
-    arquivos_processados = False
-
-    # Processar inventário
-    if arquivos['inventario'] is not None:
-        df_inventario = carregar_arquivo(arquivos['inventario'])
-        if df_inventario is not None:
-            st.session_state.dados_inventario = df_inventario
-            st.sidebar.success(f"✅ Inventário: {len(df_inventario)} registros")
-            arquivos_processados = True
-
-    # Processar cubagem
-    if arquivos['cubagem'] is not None:
-        df_cubagem = carregar_arquivo(arquivos['cubagem'])
-        if df_cubagem is not None:
-            st.session_state.dados_cubagem = df_cubagem
-            st.sidebar.success(f"✅ Cubagem: {len(df_cubagem)} medições")
-            if arquivos_processados:
-                st.session_state.arquivos_carregados = True
-
-    # CORREÇÃO: Armazenar arquivos opcionais corretamente
-    if arquivos.get('shapefile') is not None:
-        st.session_state.arquivo_shapefile = arquivos['shapefile']
-        st.sidebar.info(f"📁 Shapefile: {arquivos['shapefile'].name}")
-    else:
-        # IMPORTANTE: Manter None se não foi carregado
-        if 'arquivo_shapefile' not in st.session_state:
-            st.session_state.arquivo_shapefile = None
-
-    if arquivos.get('coordenadas') is not None:
-        st.session_state.arquivo_coordenadas = arquivos['coordenadas']
-        st.sidebar.info(f"📍 Coordenadas: {arquivos['coordenadas'].name}")
-    else:
-        # IMPORTANTE: Manter None se não foi carregado
-        if 'arquivo_coordenadas' not in st.session_state:
-            st.session_state.arquivo_coordenadas = None
-
-    return st.session_state.arquivos_carregados
-
-
-# FUNÇÃO PARA DEBUG COMPLETO DO SESSION_STATE
-def debug_session_state():
-    """Função de debug para verificar todo o session_state"""
-    with st.expander("🔍 Debug Completo - Session State"):
-        st.write("**Todos os atributos do session_state:**")
-
-        for key, value in st.session_state.items():
-            if 'arquivo' in key.lower() or 'config' in key.lower():
-                st.write(f"**{key}:**")
-                if value is None:
-                    st.write("  → None")
-                elif hasattr(value, 'name'):
-                    st.write(f"  → Arquivo: {value.name}")
-                elif isinstance(value, dict):
-                    st.write(f"  → Dict com {len(value)} itens")
-                    for k, v in value.items():
-                        st.write(f"    - {k}: {v}")
-                else:
-                    st.write(f"  → {type(value)}: {value}")
