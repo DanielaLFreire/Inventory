@@ -571,11 +571,9 @@ def calcular_estatisticas_gerais(resumo_parcelas, resumo_talhoes):
 
 def executar_inventario_completo(config_areas, parametros):
     """Executa o inventário completo usando configurações centralizadas"""
-    st.header("🚀 Executando Inventário Completo")
 
     try:
         # 1. VERIFICAR PRÉ-REQUISITOS
-        st.subheader("1️⃣ Verificando Pré-requisitos")
 
         if not st.session_state.get('resultados_hipsometricos'):
             st.error("❌ Modelos hipsométricos não executados")
@@ -585,10 +583,7 @@ def executar_inventario_completo(config_areas, parametros):
             st.error("❌ Modelos volumétricos não executados")
             return
 
-        st.success("✅ Pré-requisitos atendidos")
-
         # 2. PROCESSAR ÁREAS USANDO CONFIGURAÇÕES CENTRALIZADAS
-        st.subheader("2️⃣ Processando Áreas dos Talhões")
 
         df_areas = criar_df_areas_centralizado(config_areas)
 
@@ -596,12 +591,9 @@ def executar_inventario_completo(config_areas, parametros):
             st.error("❌ Falha crítica no processamento de áreas")
             return
 
-        st.success(f"✅ Áreas processadas: {len(df_areas)} talhões")
-        with st.expander("📊 Áreas Calculadas"):
-            st.dataframe(df_areas)
+        st.dataframe(df_areas)
 
         # 3. APLICAR FILTROS USANDO CONFIGURAÇÕES CENTRALIZADAS
-        st.subheader("3️⃣ Aplicando Filtros ao Inventário")
 
         df_inventario = st.session_state.dados_inventario.copy()
         df_filtrado = aplicar_filtros_configuracao_global(df_inventario)
@@ -610,16 +602,12 @@ def executar_inventario_completo(config_areas, parametros):
             st.error("❌ Nenhum registro restou após filtros")
             return
 
-        st.success(f"✅ Filtros aplicados: {len(df_inventario)} → {len(df_filtrado)} registros")
 
         # 4. VERIFICAR COMPATIBILIDADE ÁREAS × INVENTÁRIO
-        st.subheader("4️⃣ Verificando Compatibilidade")
 
         talhoes_inventario = set(df_filtrado['talhao'].unique())
         talhoes_areas = set(df_areas['talhao'].unique())
 
-        st.write(f"**Talhões no inventário filtrado:** {sorted(talhoes_inventario)}")
-        st.write(f"**Talhões com áreas:** {sorted(talhoes_areas)}")
 
         talhoes_comuns = talhoes_inventario & talhoes_areas
         talhoes_sem_area = talhoes_inventario - talhoes_areas
@@ -628,14 +616,11 @@ def executar_inventario_completo(config_areas, parametros):
             st.warning(f"⚠️ Talhões sem área definida: {sorted(talhoes_sem_area)}")
             st.info("💡 Será usada área padrão de 25 ha para estes talhões")
 
-        if len(talhoes_comuns) > 0:
-            st.success(f"✅ Talhões compatíveis: {sorted(talhoes_comuns)}")
-        else:
+        if len(talhoes_comuns) <= 0:
             st.error("❌ Nenhum talhão compatível entre inventário e áreas!")
             return
 
         # 5. FAZER MERGE
-        st.subheader("5️⃣ Combinando Dados")
 
         df_filtrado['talhao'] = df_filtrado['talhao'].astype(int)
         df_areas['talhao'] = df_areas['talhao'].astype(int)
@@ -643,16 +628,12 @@ def executar_inventario_completo(config_areas, parametros):
         df_com_areas = df_filtrado.merge(df_areas, on='talhao', how='left')
         df_com_areas['area_ha'] = df_com_areas['area_ha'].fillna(25.0)
 
-        st.success(f"✅ Merge concluído: {len(df_com_areas)} registros")
 
         # 6. APLICAR MODELOS
-        st.subheader("6️⃣ Aplicando Modelos")
 
         melhor_hip = st.session_state.resultados_hipsometricos['melhor_modelo']
         melhor_vol = st.session_state.resultados_volumetricos['melhor_modelo']
 
-        st.info(f"🌳 Modelo hipsométrico: {melhor_hip}")
-        st.info(f"📊 Modelo volumétrico: {melhor_vol}")
 
         # Estimar alturas
         df_com_alturas = estimar_alturas_inventario(df_com_areas, melhor_hip)
