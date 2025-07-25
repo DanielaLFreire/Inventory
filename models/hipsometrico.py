@@ -1,7 +1,7 @@
-# models/hipsometrico.py - VERSÃO MODIFICADA COM CONFIGURAÇÕES
+# models/hipsometrico.py - VERSÃO ADAPTADA PARA CONFIGURAÇÕES GLOBAIS
 '''
 Modelos hipsométricos para estimativa de altura
-ATUALIZADO: Agora aceita parâmetros de configuração
+ATUALIZADO: Usa parâmetros iniciais das configurações globais
 '''
 
 import numpy as np
@@ -9,9 +9,6 @@ import pandas as pd
 from models.base import ModeloLinear, ModeloNaoLinear, ajustar_modelo_seguro, calcular_r2_generalizado
 from sklearn.metrics import mean_squared_error
 
-
-# MANTER TODAS AS CLASSES EXISTENTES INALTERADAS
-# (Copiando suas classes exatamente como estão)
 
 def calcular_altura_dominante(df):
     '''
@@ -201,14 +198,28 @@ class ModeloProdan(ModeloLinear):
 class ModeloChapman(ModeloNaoLinear):
     '''Modelo hipsométrico de Chapman: H = b₀ * (1 - exp(-b₁ * D))^b₂'''
 
-    def __init__(self, altura_max, max_iter=5000, tolerancia=0.01):
+    def __init__(self, parametros_config=None):
+        """
+        NOVO: Aceita parâmetros das configurações globais
+
+        Args:
+            parametros_config: Dict com parâmetros das configurações
+        """
+
         def chapman_func(D, b0, b1, b2):
             return b0 * (1 - np.exp(-b1 * D)) ** b2
 
-        super().__init__("Chapman", chapman_func, [altura_max, 0.01, 1.0])
-        # NOVO: Configurar parâmetros de otimização
-        self.max_iter = max_iter
-        self.tolerancia = tolerancia
+        # NOVO: Usar parâmetros das configurações ou padrão
+        if parametros_config:
+            params_iniciais = [
+                parametros_config.get('b0', 42.12),
+                parametros_config.get('b1', 0.01),
+                parametros_config.get('b2', 1.00)
+            ]
+        else:
+            params_iniciais = [42.12, 0.01, 1.0]  # Valores padrão
+
+        super().__init__("Chapman", chapman_func, params_iniciais)
 
     def preparar_dados(self, df):
         X = df['D_cm']
@@ -224,14 +235,28 @@ class ModeloChapman(ModeloNaoLinear):
 class ModeloWeibull(ModeloNaoLinear):
     '''Modelo hipsométrico de Weibull: H = a * (1 - exp(-b * D^c))'''
 
-    def __init__(self, altura_max, max_iter=5000, tolerancia=0.01):
+    def __init__(self, parametros_config=None):
+        """
+        NOVO: Aceita parâmetros das configurações globais
+
+        Args:
+            parametros_config: Dict com parâmetros das configurações
+        """
+
         def weibull_func(D, a, b, c):
             return a * (1 - np.exp(-b * D ** c))
 
-        super().__init__("Weibull", weibull_func, [altura_max, 0.01, 1.0])
-        # NOVO: Configurar parâmetros de otimização
-        self.max_iter = max_iter
-        self.tolerancia = tolerancia
+        # NOVO: Usar parâmetros das configurações ou padrão
+        if parametros_config:
+            params_iniciais = [
+                parametros_config.get('a', 42.12),
+                parametros_config.get('b', 0.01),
+                parametros_config.get('c', 1.00)
+            ]
+        else:
+            params_iniciais = [42.12, 0.01, 1.0]  # Valores padrão
+
+        super().__init__("Weibull", weibull_func, params_iniciais)
 
     def preparar_dados(self, df):
         X = df['D_cm']
@@ -247,14 +272,28 @@ class ModeloWeibull(ModeloNaoLinear):
 class ModeloMononuclear(ModeloNaoLinear):
     '''Modelo hipsométrico Mononuclear: H = a * (1 - b * exp(-c * D))'''
 
-    def __init__(self, altura_max, max_iter=5000, tolerancia=0.01):
+    def __init__(self, parametros_config=None):
+        """
+        NOVO: Aceita parâmetros das configurações globais
+
+        Args:
+            parametros_config: Dict com parâmetros das configurações
+        """
+
         def mono_func(D, a, b, c):
             return a * (1 - b * np.exp(-c * D))
 
-        super().__init__("Mononuclear", mono_func, [altura_max, 1.0, 0.1])
-        # NOVO: Configurar parâmetros de otimização
-        self.max_iter = max_iter
-        self.tolerancia = tolerancia
+        # NOVO: Usar parâmetros das configurações ou padrão
+        if parametros_config:
+            params_iniciais = [
+                parametros_config.get('a', 42.12),
+                parametros_config.get('b', 1.00),
+                parametros_config.get('c', 0.10)
+            ]
+        else:
+            params_iniciais = [42.12, 1.0, 0.1]  # Valores padrão
+
+        super().__init__("Mononuclear", mono_func, params_iniciais)
 
     def preparar_dados(self, df):
         X = df['D_cm']
@@ -267,83 +306,13 @@ class ModeloMononuclear(ModeloNaoLinear):
         return self.predizer(X)
 
 
-# FUNÇÃO ORIGINAL (mantida para compatibilidade)
-def ajustar_todos_modelos_hipsometricos_original(df):
-    '''
-    FUNÇÃO ORIGINAL - mantida para compatibilidade
-    Ajusta todos os 7 modelos hipsométricos e retorna os resultados
-
-    Args:
-        df: DataFrame com dados preparados
-
-    Returns:
-        tuple: (resultados, predicoes, melhor_modelo)
-    '''
-    resultados = {}
-    predicoes = {}
-
-    # Calcular altura dominante
-    dominantes = calcular_altura_dominante(df)
-
-    # Criar variáveis
-    df_prep = criar_variaveis_hipsometricas(df, dominantes)
-
-    altura_max = df_prep['H_m'].max() * 1.2
-
-    # Lista de modelos
-    modelos = [
-        ModeloCurtis(),
-        ModeloCampos(),
-        ModeloHenri(),
-        ModeloProdan(),
-        ModeloChapman(altura_max),
-        ModeloWeibull(altura_max),
-        ModeloMononuclear(altura_max)
-    ]
-
-    # Ajustar cada modelo
-    for modelo in modelos:
-        try:
-            X, y = modelo.preparar_dados(df_prep)
-
-            if modelo.ajustar(X, y):
-                # Predizer alturas
-                h_pred = modelo.predizer_altura(df_prep)
-                predicoes[modelo.nome] = h_pred
-
-                # Calcular métricas
-                r2g = calcular_r2_generalizado(df_prep['H_m'], h_pred)
-                rmse = np.sqrt(mean_squared_error(df_prep['H_m'], h_pred))
-
-                resultados[modelo.nome] = {
-                    'r2g': r2g,
-                    'rmse': rmse,
-                    'modelo': modelo
-                }
-
-        except Exception as e:
-            print(f"Erro no modelo {modelo.nome}: {e}")
-            continue
-
-    # Encontrar melhor modelo
-    if resultados:
-        melhor_modelo = max(resultados.keys(), key=lambda k: resultados[k]['r2g'])
-        return resultados, predicoes, melhor_modelo
-    else:
-        return {}, {}, None
-
-
-# NOVA FUNÇÃO COM CONFIGURAÇÕES
 def ajustar_todos_modelos_hipsometricos(df, config=None):
     '''
-    NOVA VERSÃO: Ajusta todos os modelos hipsométricos com configurações opcionais
+    VERSÃO ATUALIZADA: Ajusta todos os modelos hipsométricos usando configurações globais
 
     Args:
         df: DataFrame com dados preparados
-        config: Dict com configurações opcionais (NOVO)
-               - incluir_nao_lineares: bool (default: True)
-               - max_iteracoes: int (default: 5000)
-               - tolerancia_ajuste: float (default: 0.01)
+        config: Dict com configurações globais (NOVO)
 
     Returns:
         tuple: (resultados, predicoes, melhor_modelo)
@@ -355,6 +324,11 @@ def ajustar_todos_modelos_hipsometricos(df, config=None):
     incluir_nao_lineares = config.get('incluir_nao_lineares', True)
     max_iteracoes = config.get('max_iteracoes', 5000)
     tolerancia_ajuste = config.get('tolerancia_ajuste', 0.01)
+
+    # NOVO: Obter parâmetros específicos dos modelos não-lineares
+    parametros_chapman = config.get('parametros_chapman', {'b0': 42.12, 'b1': 0.01, 'b2': 1.00})
+    parametros_weibull = config.get('parametros_weibull', {'a': 42.12, 'b': 0.01, 'c': 1.00})
+    parametros_mononuclear = config.get('parametros_mononuclear', {'a': 42.12, 'b': 1.00, 'c': 0.10})
 
     resultados = {}
     predicoes = {}
@@ -377,10 +351,11 @@ def ajustar_todos_modelos_hipsometricos(df, config=None):
 
     modelos_nao_lineares = []
     if incluir_nao_lineares:
+        # NOVO: Criar modelos não-lineares com parâmetros das configurações
         modelos_nao_lineares = [
-            ModeloChapman(altura_max, max_iteracoes, tolerancia_ajuste),
-            ModeloWeibull(altura_max, max_iteracoes, tolerancia_ajuste),
-            ModeloMononuclear(altura_max, max_iteracoes, tolerancia_ajuste)
+            ModeloChapman(parametros_chapman),
+            ModeloWeibull(parametros_weibull),
+            ModeloMononuclear(parametros_mononuclear)
         ]
 
     # Combinar modelos conforme configuração
@@ -388,6 +363,13 @@ def ajustar_todos_modelos_hipsometricos(df, config=None):
 
     print(
         f"Ajustando {len(todos_modelos)} modelos (Lineares: {len(modelos_lineares)}, Não-lineares: {len(modelos_nao_lineares)})")
+
+    # NOVO: Configurar parâmetros de otimização nos modelos não-lineares
+    for modelo in modelos_nao_lineares:
+        if hasattr(modelo, 'max_iter'):
+            modelo.max_iter = max_iteracoes
+        if hasattr(modelo, 'tolerancia'):
+            modelo.tolerancia = tolerancia_ajuste
 
     # Ajustar cada modelo
     for modelo in todos_modelos:
@@ -409,7 +391,14 @@ def ajustar_todos_modelos_hipsometricos(df, config=None):
                     'modelo': modelo
                 }
 
-                print(f"✅ {modelo.nome}: R²={r2g:.4f}, RMSE={rmse:.4f}")
+                # NOVO: Mostrar parâmetros utilizados para modelos não-lineares
+                if isinstance(modelo, ModeloNaoLinear):
+                    print(f"✅ {modelo.nome}: R²={r2g:.4f}, RMSE={rmse:.4f}")
+                    print(f"   Parâmetros iniciais: {modelo.params_iniciais}")
+                    if hasattr(modelo, 'parametros') and modelo.parametros is not None:
+                        print(f"   Parâmetros finais: {modelo.parametros}")
+                else:
+                    print(f"✅ {modelo.nome}: R²={r2g:.4f}, RMSE={rmse:.4f}")
 
         except Exception as e:
             print(f"❌ Erro no modelo {modelo.nome}: {e}")
@@ -425,227 +414,196 @@ def ajustar_todos_modelos_hipsometricos(df, config=None):
         return {}, {}, None
 
 
-# FUNÇÃO WRAPPER PARA COMPATIBILIDADE TOTAL
-def ajustar_modelos_hipsometricos_compativel(df, config=None):
-    '''
-    WRAPPER: Garantia de compatibilidade total
-    Detecta automaticamente se pode usar configurações
-    '''
-    try:
-        # Tentar primeira com configurações
-        return ajustar_todos_modelos_hipsometricos(df, config)
-    except TypeError as e:
-        if 'config' in str(e):
-            # Se erro é relacionado ao parâmetro config, usar função original
-            print("⚠️ Usando função original (sem configurações)")
-            return ajustar_todos_modelos_hipsometricos_original(df)
-        else:
-            # Outro tipo de erro, repassar
-            raise e
-    except Exception as e:
-        # Outros erros, repassar
-        raise e
-
-
-class ModeloCurtis(ModeloLinear):
-    '''Modelo hipsométrico de Curtis: ln(H) = β₀ + β₁ * (1/D)'''
-
-    def __init__(self):
-        super().__init__("Curtis")
-
-    def preparar_dados(self, df):
-        X = df[['inv_D']]
-        y = df['ln_H']
-        return X, y
-
-    def predizer_altura(self, df):
-        '''Prediz altura real (não ln)'''
-        X, _ = self.preparar_dados(df)
-        ln_h_pred = self.predizer(X)
-        return np.exp(ln_h_pred)
-
-
-class ModeloCampos(ModeloLinear):
-    '''Modelo hipsométrico de Campos: ln(H) = β₀ + β₁ * (1/D) + β₂ * ln(H_dom)'''
-
-    def __init__(self):
-        super().__init__("Campos")
-
-    def preparar_dados(self, df):
-        X = df[['inv_D', 'ln_H_dom']]
-        y = df['ln_H']
-        return X, y
-
-    def predizer_altura(self, df):
-        '''Prediz altura real (não ln)'''
-        X, _ = self.preparar_dados(df)
-        ln_h_pred = self.predizer(X)
-        return np.exp(ln_h_pred)
-
-
-class ModeloHenri(ModeloLinear):
-    '''Modelo hipsométrico de Henri: H = β₀ + β₁ * ln(D)'''
-
-    def __init__(self):
-        super().__init__("Henri")
-
-    def preparar_dados(self, df):
-        X = df[['ln_D']]
-        y = df['H_m']
-        return X, y
-
-    def predizer_altura(self, df):
-        '''Prediz altura diretamente'''
-        X, _ = self.preparar_dados(df)
-        return self.predizer(X)
-
-
-class ModeloProdan(ModeloLinear):
-    '''Modelo hipsométrico de Prodan: D²/(H-1.3) = β₀ + β₁*D + β₂*D² + β₃*D*Idade'''
-
-    def __init__(self):
-        super().__init__("Prodan")
-        self.tem_idade = False
-
-    def preparar_dados(self, df):
-        # Verificar disponibilidade de idade
-        self.tem_idade = 'idade_anos' in df.columns and df['idade_anos'].notna().sum() > 10
-
-        if self.tem_idade:
-            colunas = ['D_cm', 'D2', 'DI']
-        else:
-            colunas = ['D_cm', 'D2']
-
-        X = df[colunas]
-        y = df['Prod']
-        return X, y
-
-    def predizer_altura(self, df):
-        '''Prediz altura através da produtividade'''
-        X, _ = self.preparar_dados(df)
-        prod_pred = self.predizer(X)
-        return (df['D2'] / np.clip(prod_pred, 0.1, None)) + 1.3
-
-
-class ModeloChapman(ModeloNaoLinear):
-    '''Modelo hipsométrico de Chapman: H = b₀ * (1 - exp(-b₁ * D))^b₂'''
-
-    def __init__(self, altura_max):
-        def chapman_func(D, b0, b1, b2):
-            return b0 * (1 - np.exp(-b1 * D)) ** b2
-
-        super().__init__("Chapman", chapman_func, [altura_max, 0.01, 1.0])
-
-    def preparar_dados(self, df):
-        X = df['D_cm']
-        y = df['H_m']
-        return X, y
-
-    def predizer_altura(self, df):
-        '''Prediz altura diretamente'''
-        X, _ = self.preparar_dados(df)
-        return self.predizer(X)
-
-
-class ModeloWeibull(ModeloNaoLinear):
-    '''Modelo hipsométrico de Weibull: H = a * (1 - exp(-b * D^c))'''
-
-    def __init__(self, altura_max):
-        def weibull_func(D, a, b, c):
-            return a * (1 - np.exp(-b * D ** c))
-
-        super().__init__("Weibull", weibull_func, [altura_max, 0.01, 1.0])
-
-    def preparar_dados(self, df):
-        X = df['D_cm']
-        y = df['H_m']
-        return X, y
-
-    def predizer_altura(self, df):
-        '''Prediz altura diretamente'''
-        X, _ = self.preparar_dados(df)
-        return self.predizer(X)
-
-
-class ModeloMononuclear(ModeloNaoLinear):
-    '''Modelo hipsométrico Mononuclear: H = a * (1 - b * exp(-c * D))'''
-
-    def __init__(self, altura_max):
-        def mono_func(D, a, b, c):
-            return a * (1 - b * np.exp(-c * D))
-
-        super().__init__("Mononuclear", mono_func, [altura_max, 1.0, 0.1])
-
-    def preparar_dados(self, df):
-        X = df['D_cm']
-        y = df['H_m']
-        return X, y
-
-    def predizer_altura(self, df):
-        '''Prediz altura diretamente'''
-        X, _ = self.preparar_dados(df)
-        return self.predizer(X)
-
-
-def ajustar_todos_modelos_hipsometricos(df):
-    '''
-    Ajusta todos os 7 modelos hipsométricos e retorna os resultados
+def obter_parametros_modelo_das_configuracoes(nome_modelo, config):
+    """
+    NOVA: Obtém parâmetros iniciais para um modelo específico das configurações
 
     Args:
-        df: DataFrame com dados preparados
+        nome_modelo: 'Chapman', 'Weibull', ou 'Mononuclear'
+        config: Configurações globais
 
     Returns:
-        tuple: (resultados, predicoes, melhor_modelo)
-    '''
-    resultados = {}
-    predicoes = {}
+        dict: Parâmetros iniciais para o modelo
+    """
+    parametros_map = {
+        'Chapman': config.get('parametros_chapman', {'b0': 42.12, 'b1': 0.01, 'b2': 1.00}),
+        'Weibull': config.get('parametros_weibull', {'a': 42.12, 'b': 0.01, 'c': 1.00}),
+        'Mononuclear': config.get('parametros_mononuclear', {'a': 42.12, 'b': 1.00, 'c': 0.10})
+    }
 
-    # Calcular altura dominante
-    dominantes = calcular_altura_dominante(df)
+    return parametros_map.get(nome_modelo, {})
 
-    # Criar variáveis
-    df_prep = criar_variaveis_hipsometricas(df, dominantes)
 
-    altura_max = df_prep['H_m'].max() * 1.2
+def validar_parametros_configuracao(config):
+    """
+    NOVA: Valida parâmetros de configuração antes do ajuste
 
-    # Lista de modelos
-    modelos = [
-        ModeloCurtis(),
-        ModeloCampos(),
-        ModeloHenri(),
-        ModeloProdan(),
-        ModeloChapman(altura_max),
-        ModeloWeibull(altura_max),
-        ModeloMononuclear(altura_max)
-    ]
+    Args:
+        config: Configurações globais
 
-    # Ajustar cada modelo
-    for modelo in modelos:
-        try:
-            X, y = modelo.preparar_dados(df_prep)
+    Returns:
+        dict: {'valido': bool, 'avisos': list, 'erros': list}
+    """
+    avisos = []
+    erros = []
 
-            if modelo.ajustar(X, y):
-                # Predizer alturas
-                h_pred = modelo.predizer_altura(df_prep)
-                predicoes[modelo.nome] = h_pred
+    if config.get('incluir_nao_lineares', True):
+        # Validar Chapman
+        chapman = config.get('parametros_chapman', {})
+        if chapman.get('b0', 0) < 10:
+            avisos.append("Chapman: Altura assintótica muito baixa (< 10m)")
+        if chapman.get('b1', 0) > 0.5:
+            avisos.append("Chapman: Taxa de crescimento muito alta (> 0.5)")
 
-                # Calcular métricas
-                r2g = calcular_r2_generalizado(df_prep['H_m'], h_pred)
-                rmse = np.sqrt(mean_squared_error(df_prep['H_m'], h_pred))
+        # Validar Weibull
+        weibull = config.get('parametros_weibull', {})
+        if weibull.get('a', 0) < 10:
+            avisos.append("Weibull: Altura assintótica muito baixa (< 10m)")
+        if weibull.get('c', 0) > 3:
+            avisos.append("Weibull: Parâmetro de forma muito alto (> 3)")
 
-                resultados[modelo.nome] = {
-                    'r2g': r2g,
-                    'rmse': rmse,
-                    'modelo': modelo
-                }
+        # Validar Mononuclear
+        mono = config.get('parametros_mononuclear', {})
+        if mono.get('a', 0) < 10:
+            avisos.append("Mononuclear: Altura assintótica muito baixa (< 10m)")
+        if mono.get('b', 0) < 0.5:
+            avisos.append("Mononuclear: Parâmetro de intercepto muito baixo (< 0.5)")
 
-        except Exception as e:
-            print(f"Erro no modelo {modelo.nome}: {e}")
-            continue
+        # Validar parâmetros de otimização
+        max_iter = config.get('max_iteracoes', 5000)
+        if max_iter < 1000:
+            avisos.append("Poucas iterações para modelos não-lineares (< 1000)")
 
-    # Encontrar melhor modelo
-    if resultados:
-        melhor_modelo = max(resultados.keys(), key=lambda k: resultados[k]['r2g'])
-        return resultados, predicoes, melhor_modelo
-    else:
-        return {}, {}, None
+        tolerancia = config.get('tolerancia_ajuste', 0.01)
+        if tolerancia > 0.1:
+            avisos.append("Tolerância muito alta (> 0.1)")
+
+    return {
+        'valido': len(erros) == 0,
+        'avisos': avisos,
+        'erros': erros
+    }
+
+
+def validar_parametros_configuracao(config):
+    """
+    NOVA: Valida parâmetros de configuração antes do ajuste
+
+    Args:
+        config: Configurações globais
+
+    Returns:
+        dict: {'valido': bool, 'avisos': list, 'erros': list}
+    """
+    avisos = []
+    erros = []
+
+    if config.get('incluir_nao_lineares', True):
+        # Validar Chapman
+        chapman = config.get('parametros_chapman', {})
+        if chapman.get('b0', 0) < 10:
+            avisos.append("Chapman: Altura assintótica muito baixa (< 10m)")
+        if chapman.get('b0', 0) > 60:
+            avisos.append("Chapman: Altura assintótica muito alta (> 60m)")
+        if chapman.get('b1', 0) > 0.5:
+            avisos.append("Chapman: Taxa de crescimento muito alta (> 0.5)")
+        if chapman.get('b1', 0) <= 0:
+            erros.append("Chapman: Taxa de crescimento deve ser > 0")
+
+        # Validar Weibull
+        weibull = config.get('parametros_weibull', {})
+        if weibull.get('a', 0) < 10:
+            avisos.append("Weibull: Altura assintótica muito baixa (< 10m)")
+        if weibull.get('a', 0) > 60:
+            avisos.append("Weibull: Altura assintótica muito alta (> 60m)")
+        if weibull.get('c', 0) > 3:
+            avisos.append("Weibull: Parâmetro de forma muito alto (> 3)")
+        if weibull.get('b', 0) <= 0:
+            erros.append("Weibull: Parâmetro b deve ser > 0")
+
+        # Validar Mononuclear
+        mono = config.get('parametros_mononuclear', {})
+        if mono.get('a', 0) < 10:
+            avisos.append("Mononuclear: Altura assintótica muito baixa (< 10m)")
+        if mono.get('a', 0) > 60:
+            avisos.append("Mononuclear: Altura assintótica muito alta (> 60m)")
+        if mono.get('b', 0) < 0.5:
+            avisos.append("Mononuclear: Parâmetro de intercepto muito baixo (< 0.5)")
+        if mono.get('b', 0) > 2.0:
+            avisos.append("Mononuclear: Parâmetro de intercepto muito alto (> 2.0)")
+        if mono.get('c', 0) <= 0:
+            erros.append("Mononuclear: Taxa de decaimento deve ser > 0")
+
+        # Validar parâmetros de otimização
+        max_iter = config.get('max_iteracoes', 5000)
+        if max_iter < 1000:
+            avisos.append("Poucas iterações para modelos não-lineares (< 1000)")
+        if max_iter > 20000:
+            avisos.append("Muitas iterações configuradas (> 20000) - pode ser lento")
+
+        tolerancia = config.get('tolerancia_ajuste', 0.01)
+        if tolerancia > 0.1:
+            avisos.append("Tolerância muito alta (> 0.1)")
+        if tolerancia < 0.001:
+            avisos.append("Tolerância muito baixa (< 0.001) - pode não convergir")
+
+    return {
+        'valido': len(erros) == 0,
+        'avisos': avisos,
+        'erros': erros
+    }
+
+
+def gerar_relatorio_parametros_utilizados(config, resultados):
+    """
+    NOVA: Gera relatório dos parâmetros utilizados nos modelos
+
+    Args:
+        config: Configurações aplicadas
+        resultados: Resultados dos modelos
+
+    Returns:
+        str: Relatório em formato markdown
+    """
+    relatorio = "# PARÂMETROS UTILIZADOS - MODELOS HIPSOMÉTRICOS\n\n"
+
+    if config.get('incluir_nao_lineares', True):
+        relatorio += "## Parâmetros Iniciais dos Modelos Não-Lineares\n\n"
+
+        # Chapman
+        chapman = config.get('parametros_chapman', {})
+        relatorio += f"### Chapman\n"
+        relatorio += f"- b₀ (altura assintótica): {chapman.get('b0', 42.12)}\n"
+        relatorio += f"- b₁ (taxa de crescimento): {chapman.get('b1', 0.01)}\n"
+        relatorio += f"- b₂ (parâmetro de forma): {chapman.get('b2', 1.00)}\n\n"
+
+        # Weibull
+        weibull = config.get('parametros_weibull', {})
+        relatorio += f"### Weibull\n"
+        relatorio += f"- a (altura assintótica): {weibull.get('a', 42.12)}\n"
+        relatorio += f"- b (parâmetro de escala): {weibull.get('b', 0.01)}\n"
+        relatorio += f"- c (parâmetro de forma): {weibull.get('c', 1.00)}\n\n"
+
+        # Mononuclear
+        mono = config.get('parametros_mononuclear', {})
+        relatorio += f"### Mononuclear\n"
+        relatorio += f"- a (altura assintótica): {mono.get('a', 42.12)}\n"
+        relatorio += f"- b (parâmetro de intercepto): {mono.get('b', 1.00)}\n"
+        relatorio += f"- c (taxa de decaimento): {mono.get('c', 0.10)}\n\n"
+
+        # Parâmetros de otimização
+        relatorio += "## Parâmetros de Otimização\n\n"
+        relatorio += f"- Máximo de iterações: {config.get('max_iteracoes', 5000)}\n"
+        relatorio += f"- Tolerância: {config.get('tolerancia_ajuste', 0.01)}\n\n"
+
+    # Resultados obtidos
+    relatorio += "## Resultados Obtidos\n\n"
+    for modelo, resultado in resultados.items():
+        r2g = resultado['r2g']
+        rmse = resultado['rmse']
+        relatorio += f"- **{modelo}**: R² = {r2g:.4f}, RMSE = {rmse:.4f}\n"
+
+    relatorio += f"\n**Total de modelos ajustados**: {len(resultados)}\n"
+    relatorio += f"**Timestamp**: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+
+    return relatorio

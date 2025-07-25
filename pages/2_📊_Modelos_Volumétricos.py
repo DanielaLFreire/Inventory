@@ -1,8 +1,8 @@
-# pages/2_📊_Modelos_Volumétricos.py - VERSÃO COMPLETA E CORRIGIDA
+# pages/2_📊_Modelos_Volumétricos.py - VERSÃO ADAPTADA PARA CONFIGURAÇÕES GLOBAIS
 """
 Etapa 2: Modelos Volumétricos - USANDO CONFIGURAÇÕES CENTRALIZADAS
 Cubagem e análise de modelos de volume com filtros globais
-CORRIGIDO: Keys duplicadas, melhorias de UX
+NOVO: Preparado para futuras extensões com parâmetros configuráveis
 """
 
 import streamlit as st
@@ -91,16 +91,54 @@ def mostrar_configuracao_aplicada_cubagem():
             st.write("• Validação: Automática")
             st.caption("  Dados inconsistentes são removidos")
 
+    # NOVO: Mostrar configurações específicas para volumétricos (preparado para futuras extensões)
+    mostrar_configuracoes_volumetricas_avancadas(config)
+
     # Botão para ajustar configurações
     if st.button("🔧 Ajustar Configurações", key="btn_ajustar_config_vol"):
         st.switch_page("pages/0_⚙️_Configurações.py")
+
+
+def mostrar_configuracoes_volumetricas_avancadas(config):
+    """NOVO: Mostra configurações avançadas para modelos volumétricos"""
+    # NOTA: Atualmente modelos volumétricos são lineares, mas preparado para futuras extensões
+
+    with st.expander("🔧 Configurações Avançadas dos Modelos Volumétricos"):
+        st.info("💡 Configurações aplicadas nos modelos volumétricos")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.write("**📊 Modelos Disponíveis:**")
+            st.write("• Schumacher-Hall (logarítmico)")
+            st.write("• G1 - Goulding (logarítmico)")
+            st.write("• G2 - Linear direto")
+            st.write("• G3 - Spurr (logarítmico)")
+
+            # NOVO: Verificar se há configurações específicas para volumétricos
+            vol_config = config.get('parametros_vol_nao_lineares', {})
+            if vol_config.get('enabled', False):
+                st.success("✅ Configurações não-lineares habilitadas")
+            else:
+                st.info("ℹ️ Usando apenas modelos lineares padrão")
+
+        with col2:
+            st.write("**⚙️ Parâmetros de Qualidade:**")
+            st.write("• Validação automática de outliers")
+            st.write("• Cálculo de R² tradicional")
+            st.write("• Análise de resíduos")
+            st.write("• Detecção de dados inconsistentes")
+
+            # NOVO: Mostrar configurações de tolerância se disponíveis
+            tolerancia = config.get('tolerancia_ajuste', 0.01)
+            st.write(f"• Tolerância para validação: {tolerancia}")
 
 
 def processar_cubagem_com_filtros():
     """Processa cubagem aplicando filtros das configurações globais"""
     st.header("🔄 Processamento da Cubagem")
 
-    # Aplicar filtros às árvores da cubagem baseado nos talhões excluídos
+    # NOVO: Aplicar filtros às árvores da cubagem baseado nas configurações globais
     config = obter_configuracao_global()
     df_cubagem_original = st.session_state.dados_cubagem
 
@@ -117,6 +155,12 @@ def processar_cubagem_com_filtros():
         df_cubagem_filtrada = df_cubagem_original
         st.info("🔍 Nenhum filtro de talhão aplicado na cubagem")
 
+    # NOVO: Aplicar filtro de diâmetro mínimo na cubagem também
+    diametro_min = config.get('diametro_min', 4.0)
+    if 'D_cm' in df_cubagem_filtrada.columns:
+        df_cubagem_filtrada = df_cubagem_filtrada[df_cubagem_filtrada['D_cm'] >= diametro_min]
+        st.info(f"🔍 Filtro de diâmetro aplicado: >= {diametro_min} cm")
+
     # Verificar se há dados suficientes após filtros
     if len(df_cubagem_filtrada) < 10:
         st.error("❌ Poucos dados de cubagem após aplicar filtros")
@@ -131,19 +175,18 @@ def processar_cubagem_com_filtros():
         st.error("❌ Poucos volumes válidos da cubagem após filtros")
         return None, None
 
-    # Aplicar filtro de diâmetro mínimo aos volumes calculados
-    diametro_min = config.get('diametro_min', 4.0)
-    volumes_filtrados = volumes_arvore[volumes_arvore['D_cm'] >= diametro_min]
+    # NOVO: Aplicar validação adicional baseada nas configurações
+    volumes_validados = aplicar_validacao_volumetrica(volumes_arvore, config)
 
-    if len(volumes_filtrados) != len(volumes_arvore):
-        st.info(f"🔍 Filtro de diâmetro aplicado: {len(volumes_arvore)} → {len(volumes_filtrados)} árvores")
+    if len(volumes_validados) != len(volumes_arvore):
+        st.info(f"🔍 Validação aplicada: {len(volumes_arvore)} → {len(volumes_validados)} volumes válidos")
 
-    if len(volumes_filtrados) < 5:
-        st.error("❌ Poucos volumes válidos após filtro de diâmetro")
+    if len(volumes_validados) < 5:
+        st.error("❌ Poucos volumes válidos após validação")
         return None, None
 
     # Calcular estatísticas
-    stats_cubagem = calcular_estatisticas_cubagem(volumes_filtrados)
+    stats_cubagem = calcular_estatisticas_cubagem(volumes_validados)
 
     # Mostrar estatísticas
     st.subheader("📊 Estatísticas da Cubagem (Dados Filtrados)")
@@ -159,9 +202,41 @@ def processar_cubagem_com_filtros():
         st.metric("CV Volume", f"{stats_cubagem['cv_volume']:.1f}%")
 
     # Gráficos da cubagem
-    mostrar_graficos_cubagem(volumes_filtrados, stats_cubagem)
+    mostrar_graficos_cubagem(volumes_validados, stats_cubagem)
 
-    return volumes_filtrados, stats_cubagem
+    return volumes_validados, stats_cubagem
+
+
+def aplicar_validacao_volumetrica(volumes_arvore, config):
+    """NOVO: Aplica validação adicional baseada nas configurações"""
+    df_validado = volumes_arvore.copy()
+
+    # Remover outliers extremos baseado na tolerância configurada
+    tolerancia = config.get('tolerancia_ajuste', 0.01)
+
+    # Calcular limites baseados no percentil
+    Q1 = df_validado['V'].quantile(0.25)
+    Q3 = df_validado['V'].quantile(0.75)
+    IQR = Q3 - Q1
+
+    # Usar tolerância como fator multiplicador (mais restritivo = menos tolerância)
+    fator_outlier = max(1.5, 3.0 * (1 - tolerancia * 10))  # Varia de 1.5 a 3.0
+
+    limite_inferior = Q1 - fator_outlier * IQR
+    limite_superior = Q3 + fator_outlier * IQR
+
+    # Filtrar outliers
+    mask_validos = (df_validado['V'] >= limite_inferior) & (df_validado['V'] <= limite_superior)
+    df_validado = df_validado[mask_validos]
+
+    # Validações adicionais
+    df_validado = df_validado[
+        (df_validado['V'] > 0.001) &  # Volume mínimo
+        (df_validado['D_cm'] > 0) &  # DAP válido
+        (df_validado['H_m'] > 1.3)  # Altura válida
+        ]
+
+    return df_validado
 
 
 def mostrar_graficos_cubagem(volumes_arvore, stats_cubagem):
@@ -207,14 +282,14 @@ def executar_analise_volumetrica(volumes_arvore):
         status_text.text("🔄 Preparando dados para modelagem...")
         progress_bar.progress(0.2)
 
-        # Obter configurações
+        # NOVO: Obter configurações globais
         config = obter_configuracao_global()
 
         status_text.text("🧮 Ajustando modelos volumétricos...")
         progress_bar.progress(0.5)
 
-        # Usar função modular existente
-        resultados, predicoes, melhor_modelo = ajustar_todos_modelos_volumetricos(volumes_arvore)
+        # NOVO: Passar configurações para a função (preparado para futuras extensões)
+        resultados, predicoes, melhor_modelo = ajustar_todos_modelos_volumetricos_com_config(volumes_arvore, config)
 
         progress_bar.progress(1.0)
         status_text.text("✅ Análise concluída!")
@@ -235,7 +310,7 @@ def executar_analise_volumetrica(volumes_arvore):
 
         st.success(f"🏆 Melhor modelo: **{melhor_modelo}**")
 
-        # Mostrar informações sobre configurações aplicadas
+        # NOVO: Mostrar informações sobre configurações aplicadas
         mostrar_info_configuracoes_volumetricas(config, resultados)
 
         # Mostrar resultados
@@ -253,6 +328,41 @@ def executar_analise_volumetrica(volumes_arvore):
             st.write(f"**Configurações**: {config}")
 
 
+def ajustar_todos_modelos_volumetricos_com_config(volumes_arvore, config):
+    """NOVO: Wrapper que aplica configurações aos modelos volumétricos"""
+    # Por enquanto, modelos volumétricos são lineares, mas preparado para extensões futuras
+
+    # Aplicar validações baseadas na configuração
+    tolerancia = config.get('tolerancia_ajuste', 0.01)
+
+    # Usar função original mas com validação adicional
+    resultados, predicoes, melhor_modelo = ajustar_todos_modelos_volumetricos(volumes_arvore)
+
+    # NOVO: Aplicar filtros de qualidade baseados na configuração
+    if resultados:
+        # Filtrar modelos com R² muito baixo baseado na tolerância
+        r2_minimo = max(0.5, 1.0 - tolerancia * 10)  # Varia de 0.5 a 0.9
+
+        resultados_filtrados = {}
+        predicoes_filtradas = {}
+
+        for modelo, resultado in resultados.items():
+            if resultado['r2'] >= r2_minimo:
+                resultados_filtrados[modelo] = resultado
+                predicoes_filtradas[modelo] = predicoes[modelo]
+            else:
+                st.warning(f"⚠️ Modelo {modelo} removido (R² = {resultado['r2']:.3f} < {r2_minimo:.3f})")
+
+        if resultados_filtrados:
+            # Redeterminar melhor modelo após filtros
+            melhor_modelo_filtrado = max(resultados_filtrados.keys(), key=lambda k: resultados_filtrados[k]['r2'])
+            return resultados_filtrados, predicoes_filtradas, melhor_modelo_filtrado
+        else:
+            st.warning("⚠️ Todos os modelos foram filtrados. Usando resultados originais.")
+
+    return resultados, predicoes, melhor_modelo
+
+
 def mostrar_info_configuracoes_volumetricas(config, resultados):
     """Mostra informações sobre como configurações foram aplicadas"""
     with st.expander("ℹ️ Como as Configurações Foram Aplicadas"):
@@ -267,15 +377,22 @@ def mostrar_info_configuracoes_volumetricas(config, resultados):
             else:
                 st.write("• Talhões excluídos: Nenhum")
 
+            st.write(f"• Tolerância: {config.get('tolerancia_ajuste', 0.01)}")
+
         with col2:
             st.write("**📊 Resultados Obtidos:**")
             st.write(f"• Total de modelos: {len(resultados)}")
             st.write(f"• Método de cubagem: Smalian")
             st.write(f"• Validação: Automática")
 
+            # NOVO: Mostrar informações sobre qualidade dos modelos
+            if resultados:
+                r2_medio = sum(r['r2'] for r in resultados.values()) / len(resultados)
+                st.write(f"• R² médio: {r2_medio:.3f}")
+
         st.info("""
-        💡 **Nota**: Os filtros são aplicados na fase de cubagem, 
-        garantindo que apenas dados válidos sejam usados na modelagem.
+        💡 **Nota**: Os filtros são aplicados na fase de cubagem e validação, 
+        garantindo que apenas dados válidos sejam usados na modelagem volumétrica.
         """)
 
 
@@ -412,7 +529,7 @@ def mostrar_downloads_volumetricos(resultados, predicoes, volumes_arvore, sufixo
             csv_ranking,
             "ranking_modelos_volumetricos.csv",
             "text/csv",
-            key=gerar_key_unica(f"download_ranking_vol{sufixo}")  # KEY ÚNICA
+            key=gerar_key_unica(f"download_ranking_vol{sufixo}")
         )
 
     with col2:
@@ -428,27 +545,27 @@ def mostrar_downloads_volumetricos(resultados, predicoes, volumes_arvore, sufixo
             csv_dados,
             "dados_predicoes_volumetricas.csv",
             "text/csv",
-            key=gerar_key_unica(f"download_dados_vol{sufixo}")  # KEY ÚNICA
+            key=gerar_key_unica(f"download_dados_vol{sufixo}")
         )
 
     with col3:
-        # Relatório com configurações
-        relatorio = gerar_relatorio_volumetrico_centralizado(resultados, df_ranking)
+        # NOVO: Relatório com configurações
+        relatorio = gerar_relatorio_volumetrico_com_configuracoes(resultados, df_ranking)
         st.download_button(
-            "📄 Relatório Completo",
+            "📄 Relatório com Configurações",
             relatorio,
-            "relatorio_volumetricos_completo.md",
+            "relatorio_volumetricos_configuracoes.md",
             "text/markdown",
-            key=gerar_key_unica(f"download_relatorio_vol{sufixo}")  # KEY ÚNICA
+            key=gerar_key_unica(f"download_relatorio_vol{sufixo}")
         )
 
 
-def gerar_relatorio_volumetrico_centralizado(resultados, df_ranking):
-    """Gera relatório incluindo configurações aplicadas"""
+def gerar_relatorio_volumetrico_com_configuracoes(resultados, df_ranking):
+    """NOVO: Gera relatório incluindo configurações aplicadas"""
     config = obter_configuracao_global()
     melhor = df_ranking.iloc[0]
 
-    relatorio = f"""# RELATÓRIO - MODELOS VOLUMÉTRICOS
+    relatorio = f"""# RELATÓRIO - MODELOS VOLUMÉTRICOS COM CONFIGURAÇÕES
 
 ## 🏆 MELHOR MODELO
 **{melhor['Modelo']}** - {melhor['Qualidade']}
@@ -459,11 +576,18 @@ def gerar_relatorio_volumetrico_centralizado(resultados, df_ranking):
 ### Filtros na Cubagem:
 - Diâmetro mínimo: {config.get('diametro_min', 4.0)} cm
 - Talhões excluídos: {config.get('talhoes_excluir', [])}
+- Tolerância de validação: {config.get('tolerancia_ajuste', 0.01)}
 
 ### Método de Cubagem:
 - Método: Smalian
 - Fórmula: V = (A₁ + A₂)/2 × L
 - Precisão: ±2-5% do volume real
+- Validação automática de outliers: ✅
+
+### Configurações de Qualidade:
+- R² mínimo aplicado: {max(0.5, 1.0 - config.get('tolerancia_ajuste', 0.01) * 10):.3f}
+- Filtros de outliers automáticos: ✅
+- Validação de dados inconsistentes: ✅
 
 ## 📊 RANKING COMPLETO
 """
@@ -478,13 +602,21 @@ def gerar_relatorio_volumetrico_centralizado(resultados, df_ranking):
 - Modelos logarítmicos: {len([m for m in resultados.keys() if m in ['Schumacher', 'G1', 'G3']])}
 - Modelos lineares: {len([m for m in resultados.keys() if m in ['G2']])}
 - Configuração centralizada aplicada: ✅
+- Validação automática aplicada: ✅
 - Timestamp: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ## 🎯 RECOMENDAÇÃO
 Use o modelo **{melhor['Modelo']}** para estimativas volumétricas neste povoamento.
 
+## 🔧 CONFIGURAÇÕES TÉCNICAS
+- Filtros aplicados na cubagem conforme configuração global
+- Outliers removidos automaticamente baseado na tolerância configurada
+- Modelos com baixo R² filtrados automaticamente
+- Consistência garantida com outras etapas do sistema
+
 ---
 *Relatório gerado pelo Sistema de Inventário Florestal com Configurações Centralizadas*
+*Cubagem processada pelo método de Smalian com validação automática*
 """
 
     return relatorio
@@ -533,6 +665,7 @@ def mostrar_fundamentos_smalian():
             • Talhões excluídos
             • Diâmetro mínimo
             • Validação automática
+            • Tolerância configurável
 
             Isso garante consistência entre todas as etapas.
             """)
@@ -544,7 +677,7 @@ def main():
         return
 
     st.title("📊 Modelos Volumétricos")
-    st.markdown("### Cubagem e Análise de Volume")
+    st.markdown("### Cubagem e Análise de Volume com Configurações Centralizadas")
 
     # Mostrar status da configuração na sidebar
     mostrar_status_configuracao_sidebar()
@@ -552,80 +685,4 @@ def main():
     # Botão para limpar resultados anteriores (evita conflitos de keys)
     if st.button("🗑️ Limpar Resultados Anteriores", key="limpar_resultados_vol"):
         if 'resultados_volumetricos' in st.session_state:
-            del st.session_state.resultados_volumetricos
-            st.success("✅ Resultados limpos!")
-            st.rerun()
-
-    # Mostrar configurações aplicadas
-    mostrar_configuracao_aplicada_cubagem()
-
-    # Fundamentos teóricos
-    mostrar_fundamentos_smalian()
-
-    # Informações dos modelos
-    with st.expander("📚 Informações dos Modelos Volumétricos"):
-        st.markdown("""
-        ### 🧮 Modelos Disponíveis
-
-        **Schumacher-Hall:**
-        - ln(V) = β₀ + β₁×ln(D) + β₂×ln(H)
-        - Modelo clássico, biologicamente realista
-
-        **G1 (Goulding):**
-        - ln(V) = β₀ + β₁×ln(D) + β₂×(1/D)
-        - Substitui altura pelo inverso do diâmetro
-
-        **G2 (Linear):**
-        - V = β₀ + β₁×D² + β₂×D²H + β₃×H
-        - Modelo linear, interpretação direta
-
-        **G3 (Spurr):**
-        - ln(V) = β₀ + β₁×ln(D²H)
-        - Extremamente simples, uma variável
-        """)
-
-    # Processar cubagem com filtros
-    resultado_cubagem = processar_cubagem_com_filtros()
-
-    if resultado_cubagem[0] is None:
-        return
-
-    volumes_arvore, stats_cubagem = resultado_cubagem
-
-    # Botão para executar análise
-    if st.button("🚀 Executar Análise Volumétrica", type="primary", use_container_width=True):
-        executar_analise_volumetrica(volumes_arvore)
-
-    # Mostrar resultados salvos se existirem - COM CONTROLE PARA EVITAR KEYS DUPLICADAS
-    if hasattr(st.session_state, 'resultados_volumetricos') and st.session_state.resultados_volumetricos:
-        st.markdown("---")
-        st.subheader("📂 Resultados Salvos")
-
-        resultados_salvos = st.session_state.resultados_volumetricos
-
-        # Verificar se configuração mudou
-        config_atual = obter_configuracao_global()
-        config_salva = resultados_salvos.get('config_aplicada', {})
-
-        if config_atual != config_salva:
-            st.warning("""
-            ⚠️ **Configurações Alteradas**
-
-            As configurações globais foram modificadas desde a última execução.
-            Os resultados abaixo podem não refletir as configurações atuais.
-
-            **Recomendação**: Execute a análise novamente para aplicar as novas configurações.
-            """)
-
-        # Checkbox para controlar exibição e evitar conflitos
-        if st.checkbox("👀 Mostrar Resultados Salvos", key="mostrar_resultados_salvos_vol"):
-            mostrar_resultados_volumetricos(
-                resultados_salvos['resultados'],
-                resultados_salvos['predicoes'],
-                resultados_salvos['volumes'],
-                "salvo"  # CONTEXTO DIFERENTE PARA EVITAR CONFLITO DE KEYS
-            )
-
-
-if __name__ == "__main__":
-    main()
+            del st.session_state

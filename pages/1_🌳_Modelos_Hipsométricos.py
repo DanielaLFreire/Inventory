@@ -1,8 +1,8 @@
-# pages/1_🌳_Modelos_Hipsométricos.py - VERSÃO COMPLETA E CORRIGIDA
+# pages/1_🌳_Modelos_Hipsométricos.py - VERSÃO ADAPTADA PARA CONFIGURAÇÕES GLOBAIS
 """
 Etapa 1: Modelos Hipsométricos - USANDO CONFIGURAÇÕES CENTRALIZADAS
-Análise completa da relação altura-diâmetro com filtros globais
-CORRIGIDO: Keys duplicadas, parâmetro config, melhorias de UX
+Análise completa da relação altura-diâmetro com filtros globais e parâmetros configurados
+NOVO: Usa parâmetros iniciais dos modelos não-lineares das configurações globais
 """
 
 import streamlit as st
@@ -11,7 +11,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import uuid
-from models.hipsometrico import ajustar_todos_modelos_hipsometricos
+from models.hipsometrico import ajustar_todos_modelos_hipsometricos, validar_parametros_configuracao
 from ui.graficos import criar_graficos_modelos
 from utils.formatacao import formatar_brasileiro, classificar_qualidade_modelo
 
@@ -96,9 +96,56 @@ def mostrar_configuracao_aplicada():
             st.write(f"• Máximo iterações: {config.get('max_iteracoes', 5000)}")
             st.write(f"• Tolerância: {config.get('tolerancia_ajuste', 0.01)}")
 
+    # NOVO: Mostrar parâmetros dos modelos não-lineares
+    if config.get('incluir_nao_lineares', True):
+        mostrar_parametros_nao_lineares(config)
+
     # Botão para ajustar configurações
     if st.button("🔧 Ajustar Configurações", key="btn_ajustar_config_hip"):
         st.switch_page("pages/0_⚙️_Configurações.py")
+
+
+def mostrar_parametros_nao_lineares(config):
+    """NOVO: Mostra parâmetros dos modelos não-lineares configurados"""
+    with st.expander("🔧 Parâmetros Iniciais dos Modelos Não-Lineares"):
+        st.info("💡 Estes são os parâmetros iniciais configurados para os modelos não-lineares")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.write("**Chapman (H = b₀(1-e^(-b₁D))^b₂):**")
+            chapman = config.get('parametros_chapman', {})
+            st.write(f"• b₀ = {chapman.get('b0', 42.12)}")
+            st.write(f"• b₁ = {chapman.get('b1', 0.01)}")
+            st.write(f"• b₂ = {chapman.get('b2', 1.00)}")
+
+        with col2:
+            st.write("**Weibull (H = a(1-e^(-bD^c))):**")
+            weibull = config.get('parametros_weibull', {})
+            st.write(f"• a = {weibull.get('a', 42.12)}")
+            st.write(f"• b = {weibull.get('b', 0.01)}")
+            st.write(f"• c = {weibull.get('c', 1.00)}")
+
+        with col3:
+            st.write("**Mononuclear (H = a(1-be^(-cD))):**")
+            mono = config.get('parametros_mononuclear', {})
+            st.write(f"• a = {mono.get('a', 42.12)}")
+            st.write(f"• b = {mono.get('b', 1.00)}")
+            st.write(f"• c = {mono.get('c', 0.10)}")
+
+        # NOVO: Validar parâmetros e mostrar avisos
+        validacao = validar_parametros_configuracao(config)
+        if validacao['avisos']:
+            st.warning("⚠️ **Avisos sobre os parâmetros configurados:**")
+            for aviso in validacao['avisos']:
+                st.warning(f"• {aviso}")
+
+        if validacao['erros']:
+            st.error("❌ **Erros nos parâmetros:**")
+            for erro in validacao['erros']:
+                st.error(f"• {erro}")
+        else:
+            st.success("✅ Parâmetros válidos para os modelos não-lineares")
 
 
 def aplicar_preview_dados():
@@ -154,7 +201,7 @@ def aplicar_preview_dados():
 
 
 def executar_analise_hipsometrica():
-    """Executa análise hipsométrica com configurações centralizadas - VERSÃO CORRIGIDA"""
+    """Executa análise hipsométrica com configurações centralizadas - VERSÃO ADAPTADA"""
     st.header("🚀 Executando Análise Hipsométrica")
 
     # Aplicar filtros centralizados
@@ -164,8 +211,21 @@ def executar_analise_hipsometrica():
         st.error("❌ Dados insuficientes após filtros. Ajuste as configurações.")
         return
 
-    # Obter configurações
+    # NOVO: Obter configurações globais completas
     config = obter_configuracao_global()
+
+    # NOVO: Validar parâmetros antes de executar
+    validacao = validar_parametros_configuracao(config)
+    if validacao['erros']:
+        st.error("❌ Erro nas configurações dos parâmetros:")
+        for erro in validacao['erros']:
+            st.error(f"• {erro}")
+        return
+
+    if validacao['avisos']:
+        st.warning("⚠️ Avisos sobre as configurações:")
+        for aviso in validacao['avisos']:
+            st.warning(f"• {aviso}")
 
     # Barra de progresso
     progress_bar = st.progress(0)
@@ -175,28 +235,11 @@ def executar_analise_hipsometrica():
         status_text.text("🔄 Preparando dados...")
         progress_bar.progress(0.1)
 
-        status_text.text("🧮 Ajustando modelos...")
+        status_text.text("🧮 Ajustando modelos com parâmetros configurados...")
         progress_bar.progress(0.3)
 
-        # CORREÇÃO: Chamar função SEM parâmetro config (função original não aceita)
-        resultados, predicoes, melhor_modelo = ajustar_todos_modelos_hipsometricos(df_filtrado)
-
-        # NOVO: Aplicar filtros de configuração NOS RESULTADOS
-        if not config.get('incluir_nao_lineares', True):
-            # Remover modelos não-lineares dos resultados
-            modelos_nao_lineares = ['Chapman', 'Weibull', 'Mononuclear']
-
-            # Filtrar resultados
-            resultados = {k: v for k, v in resultados.items() if k not in modelos_nao_lineares}
-            predicoes = {k: v for k, v in predicoes.items() if k not in modelos_nao_lineares}
-
-            # Redeterminar melhor modelo
-            if resultados:
-                melhor_modelo = max(resultados.keys(), key=lambda k: resultados[k]['r2g'])
-                st.info(f"ℹ️ Modelos não-lineares excluídos por configuração. Novo melhor: {melhor_modelo}")
-            else:
-                st.error("❌ Nenhum modelo restante após filtros de configuração")
-                return
+        # NOVO: Chamar função COM configurações completas (incluindo parâmetros)
+        resultados, predicoes, melhor_modelo = ajustar_todos_modelos_hipsometricos(df_filtrado, config)
 
         progress_bar.progress(1.0)
         status_text.text("✅ Análise concluída!")
@@ -217,8 +260,8 @@ def executar_analise_hipsometrica():
 
         st.success(f"🏆 Melhor modelo: **{melhor_modelo}**")
 
-        # Mostrar informações sobre configurações aplicadas
-        mostrar_info_configuracoes_aplicadas(config, resultados)
+        # NOVO: Mostrar informações sobre parâmetros utilizados
+        mostrar_info_parametros_utilizados(config, resultados)
 
         # Mostrar resultados
         mostrar_resultados_hipsometricos(resultados, predicoes, df_filtrado, contexto="novo")
@@ -235,33 +278,55 @@ def executar_analise_hipsometrica():
             st.write(f"**Configurações**: {config}")
 
 
-def mostrar_info_configuracoes_aplicadas(config, resultados):
-    """Mostra informações sobre como configurações foram aplicadas"""
-    with st.expander("ℹ️ Como as Configurações Foram Aplicadas"):
+def mostrar_info_parametros_utilizados(config, resultados):
+    """NOVO: Mostra informações sobre parâmetros utilizados nos modelos"""
+    with st.expander("🔧 Parâmetros Utilizados nos Modelos"):
+        st.info("💡 Informações sobre como as configurações foram aplicadas nos modelos")
+
         col1, col2 = st.columns(2)
 
         with col1:
-            st.write("**🔧 Configurações Usadas:**")
+            st.write("**⚙️ Configurações Aplicadas:**")
             st.write(f"• Incluir não-lineares: {'Sim' if config.get('incluir_nao_lineares', True) else 'Não'}")
             st.write(f"• Máx. iterações: {config.get('max_iteracoes', 5000)}")
             st.write(f"• Tolerância: {config.get('tolerancia_ajuste', 0.01)}")
+
+            if config.get('incluir_nao_lineares', True):
+                st.write("**🔧 Parâmetros Iniciais Usados:**")
+                chapman = config.get('parametros_chapman', {})
+                st.write(
+                    f"• Chapman: b₀={chapman.get('b0', 42.12)}, b₁={chapman.get('b1', 0.01)}, b₂={chapman.get('b2', 1.00)}")
+
+                weibull = config.get('parametros_weibull', {})
+                st.write(
+                    f"• Weibull: a={weibull.get('a', 42.12)}, b={weibull.get('b', 0.01)}, c={weibull.get('c', 1.00)}")
+
+                mono = config.get('parametros_mononuclear', {})
+                st.write(f"• Mononuclear: a={mono.get('a', 42.12)}, b={mono.get('b', 1.00)}, c={mono.get('c', 0.10)}")
 
         with col2:
             st.write("**📊 Resultados Obtidos:**")
             modelos_lineares = [m for m in resultados.keys() if m in ['Curtis', 'Campos', 'Henri', 'Prodan']]
             modelos_nao_lineares = [m for m in resultados.keys() if m in ['Chapman', 'Weibull', 'Mononuclear']]
 
-            st.write(f"• Modelos lineares: {len(modelos_lineares)}")
-            st.write(f"• Modelos não-lineares: {len(modelos_nao_lineares)}")
+            st.write(f"• Modelos lineares ajustados: {len(modelos_lineares)}")
+            st.write(f"• Modelos não-lineares ajustados: {len(modelos_nao_lineares)}")
             st.write(f"• Total de modelos: {len(resultados)}")
 
-        if not config.get('incluir_nao_lineares', True):
-            st.warning("⚠️ Modelos não-lineares foram excluídos conforme configuração")
+            if modelos_nao_lineares:
+                st.write("**🏆 Performance dos Não-Lineares:**")
+                for modelo in modelos_nao_lineares:
+                    if modelo in resultados:
+                        r2 = resultados[modelo]['r2g']
+                        st.write(f"• {modelo}: R² = {r2:.4f}")
 
-        st.info("""
-        💡 **Nota**: Como a função original não aceita configurações diretamente, 
-        os filtros são aplicados nos resultados após o ajuste.
-        """)
+        # NOVO: Mostrar aviso se parâmetros podem não ter convergido bem
+        if config.get('incluir_nao_lineares', True):
+            modelos_nao_lineares_resultado = [m for m in resultados.keys() if
+                                              m in ['Chapman', 'Weibull', 'Mononuclear']]
+            if len(modelos_nao_lineares_resultado) < 3:
+                st.warning(
+                    "⚠️ Alguns modelos não-lineares falharam. Considere ajustar os parâmetros iniciais nas configurações.")
 
 
 def mostrar_resultados_hipsometricos(resultados, predicoes, df_dados, contexto="novo"):
@@ -352,8 +417,21 @@ def mostrar_coeficientes_modelos(resultados):
                     elif hasattr(modelo_obj, 'parametros'):
                         # Modelo não-linear
                         params = modelo_obj.parametros
-                        for i, param in enumerate(params):
-                            st.write(f"**Parâmetro {i + 1}**: {param:.6f}")
+
+                        # NOVO: Mostrar parâmetros iniciais vs finais
+                        params_iniciais = modelo_obj.params_iniciais
+
+                        st.write("**Parâmetros Iniciais vs Finais:**")
+                        for i, (inicial, final) in enumerate(zip(params_iniciais, params)):
+                            param_name = get_parameter_name(modelo, i)
+                            st.write(f"**{param_name}**: {inicial:.6f} → {final:.6f}")
+
+                        st.write("**Convergência:**")
+                        convergiu = all(abs(f - i) < 100 for i, f in zip(params_iniciais, params))
+                        if convergiu:
+                            st.success("✅ Modelo convergiu adequadamente")
+                        else:
+                            st.warning("⚠️ Grandes mudanças nos parâmetros - verificar convergência")
 
                     else:
                         st.info("Coeficientes não disponíveis para este modelo")
@@ -364,6 +442,20 @@ def mostrar_coeficientes_modelos(resultados):
             # Estatísticas do modelo
             st.write(f"**R² Generalizado**: {resultado['r2g']:.4f}")
             st.write(f"**RMSE**: {resultado['rmse']:.4f}")
+
+
+def get_parameter_name(modelo, index):
+    """NOVO: Retorna nomes dos parâmetros para cada modelo"""
+    param_names = {
+        'Chapman': ['b₀', 'b₁', 'b₂'],
+        'Weibull': ['a', 'b', 'c'],
+        'Mononuclear': ['a', 'b', 'c']
+    }
+
+    if modelo in param_names and index < len(param_names[modelo]):
+        return param_names[modelo][index]
+    else:
+        return f"Parâmetro {index + 1}"
 
 
 def mostrar_downloads_hipsometricos(resultados, predicoes, df_dados, sufixo=""):
@@ -391,7 +483,7 @@ def mostrar_downloads_hipsometricos(resultados, predicoes, df_dados, sufixo=""):
             csv_ranking,
             "ranking_modelos_hipsometricos.csv",
             "text/csv",
-            key=gerar_key_unica(f"download_ranking_hip{sufixo}")  # KEY ÚNICA
+            key=gerar_key_unica(f"download_ranking_hip{sufixo}")
         )
 
     with col2:
@@ -407,27 +499,27 @@ def mostrar_downloads_hipsometricos(resultados, predicoes, df_dados, sufixo=""):
             csv_dados,
             "dados_predicoes_hipsometricas.csv",
             "text/csv",
-            key=gerar_key_unica(f"download_dados_hip{sufixo}")  # KEY ÚNICA
+            key=gerar_key_unica(f"download_dados_hip{sufixo}")
         )
 
     with col3:
-        # Relatório com configurações
-        relatorio = gerar_relatorio_hipsometrico_centralizado(resultados, df_ranking)
+        # NOVO: Relatório com parâmetros utilizados
+        relatorio = gerar_relatorio_hipsometrico_com_parametros(resultados, df_ranking)
         st.download_button(
-            "📄 Relatório Completo",
+            "📄 Relatório com Parâmetros",
             relatorio,
-            "relatorio_hipsometricos_completo.md",
+            "relatorio_hipsometricos_parametros.md",
             "text/markdown",
-            key=gerar_key_unica(f"download_relatorio_hip{sufixo}")  # KEY ÚNICA
+            key=gerar_key_unica(f"download_relatorio_hip{sufixo}")
         )
 
 
-def gerar_relatorio_hipsometrico_centralizado(resultados, df_ranking):
-    """Gera relatório incluindo configurações aplicadas"""
+def gerar_relatorio_hipsometrico_com_parametros(resultados, df_ranking):
+    """NOVO: Gera relatório incluindo parâmetros utilizados"""
     config = obter_configuracao_global()
     melhor = df_ranking.iloc[0]
 
-    relatorio = f"""# RELATÓRIO - MODELOS HIPSOMÉTRICOS
+    relatorio = f"""# RELATÓRIO - MODELOS HIPSOMÉTRICOS COM PARÂMETROS
 
 ## 🏆 MELHOR MODELO
 **{melhor['Modelo']}** - {melhor['Qualidade']}
@@ -445,6 +537,38 @@ def gerar_relatorio_hipsometrico_centralizado(resultados, df_ranking):
 - Máximo iterações: {config.get('max_iteracoes', 5000)}
 - Tolerância: {config.get('tolerancia_ajuste', 0.01)}
 
+## 🔧 PARÂMETROS INICIAIS DOS MODELOS NÃO-LINEARES
+"""
+
+    if config.get('incluir_nao_lineares', True):
+        # Chapman
+        chapman = config.get('parametros_chapman', {})
+        relatorio += f"""
+### Chapman (H = b₀(1-e^(-b₁D))^b₂)
+- b₀ (altura assintótica): {chapman.get('b0', 42.12)}
+- b₁ (taxa de crescimento): {chapman.get('b1', 0.01)}
+- b₂ (parâmetro de forma): {chapman.get('b2', 1.00)}
+"""
+
+        # Weibull
+        weibull = config.get('parametros_weibull', {})
+        relatorio += f"""
+### Weibull (H = a(1-e^(-bD^c)))
+- a (altura assintótica): {weibull.get('a', 42.12)}
+- b (parâmetro de escala): {weibull.get('b', 0.01)}
+- c (parâmetro de forma): {weibull.get('c', 1.00)}
+"""
+
+        # Mononuclear
+        mono = config.get('parametros_mononuclear', {})
+        relatorio += f"""
+### Mononuclear (H = a(1-be^(-cD)))
+- a (altura assintótica): {mono.get('a', 42.12)}
+- b (parâmetro de intercepto): {mono.get('b', 1.00)}
+- c (taxa de decaimento): {mono.get('c', 0.10)}
+"""
+
+    relatorio += f"""
 ## 📊 RANKING COMPLETO
 """
 
@@ -456,6 +580,7 @@ def gerar_relatorio_hipsometrico_centralizado(resultados, df_ranking):
 ## 📈 RESUMO DA ANÁLISE
 - Total de modelos avaliados: {len(resultados)}
 - Configuração centralizada aplicada: ✅
+- Parâmetros iniciais utilizados: ✅
 - Timestamp: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}
 
 ## 🎯 RECOMENDAÇÃO
@@ -463,6 +588,7 @@ Use o modelo **{melhor['Modelo']}** para estimativas de altura neste povoamento.
 
 ---
 *Relatório gerado pelo Sistema de Inventário Florestal com Configurações Centralizadas*
+*Parâmetros iniciais dos modelos não-lineares aplicados conforme configuração global*
 """
 
     return relatorio
@@ -474,7 +600,7 @@ def main():
         return
 
     st.title("🌳 Modelos Hipsométricos")
-    st.markdown("### Análise da Relação Altura-Diâmetro")
+    st.markdown("### Análise da Relação Altura-Diâmetro com Parâmetros Configurados")
 
     # Mostrar status da configuração na sidebar
     mostrar_status_configuracao_sidebar()
@@ -505,10 +631,13 @@ def main():
         - **Henri**: H = β₀ + β₁ × ln(D)
         - **Prodan**: D²/(H-1.3) = β₀ + β₁×D + β₂×D² + β₃×D×Idade
 
-        **Não-lineares:**
+        **Não-lineares (com parâmetros configuráveis):**
         - **Chapman**: H = b₀ × (1 - e^(-b₁×D))^b₂
         - **Weibull**: H = a × (1 - e^(-b×D^c))
         - **Mononuclear**: H = a × (1 - b × e^(-c×D))
+
+        💡 **Novidade**: Os parâmetros iniciais dos modelos não-lineares são configurados 
+        na Etapa 0 e aplicados automaticamente aqui!
         """)
 
     # Botão para executar análise
