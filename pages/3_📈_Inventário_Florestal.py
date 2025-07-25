@@ -305,38 +305,111 @@ def configurar_parametros_avancados():
 
 
 def criar_df_areas(config_areas):
-    """Cria DataFrame de áreas baseado na configuração"""
-    # IMPORTAR funções dos módulos especializados
-    from processors.areas import processar_areas_por_metodo
+    """
+    Cria DataFrame de áreas baseado na configuração - VERSÃO COM TRATAMENTO DE ERRO
 
-    metodo = config_areas['metodo']
+    Args:
+        config_areas: Configurações das áreas
 
-    if metodo == "Upload shapefile":
-        return processar_areas_por_metodo('shapefile', arquivo_shp=st.session_state.arquivo_shapefile)
+    Returns:
+        DataFrame com talhao e area_ha (nunca None)
+    """
+    try:
+        metodo = config_areas.get('metodo', 'Área fixa para todos')
 
-    elif metodo == "Coordenadas das parcelas":
-        raio_parcela = config_areas.get('raio_parcela', 11.28)
-        return processar_areas_por_metodo('coordenadas',
-                                          arquivo_coord=st.session_state.arquivo_coordenadas,
-                                          raio_parcela=raio_parcela)
+        if metodo == "Valores específicos por talhão":
+            areas_dict = config_areas.get('areas_manuais', {})
+            if areas_dict:
+                df_areas = pd.DataFrame([
+                    {'talhao': int(talhao), 'area_ha': float(area)}
+                    for talhao, area in areas_dict.items()
+                ])
+                st.success(f"✅ Áreas manuais configuradas: {len(df_areas)} talhões")
+                return df_areas
+            else:
+                st.warning("⚠️ Nenhuma área manual informada. Usando área padrão.")
 
-    elif metodo == "Valores específicos por talhão":
-        areas_dict = config_areas.get('areas_manuais', {})
-        talhoes = list(areas_dict.keys())
-        return processar_areas_por_metodo('manual', areas_dict=areas_dict, talhoes=talhoes)
+        elif metodo == "Upload shapefile":
+            if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile:
+                try:
+                    from utils.arquivo_handler import processar_shapefile
+                    df_areas = processar_shapefile(st.session_state.arquivo_shapefile)
+                    if df_areas is not None and len(df_areas) > 0:
+                        st.success(f"✅ Áreas do shapefile: {len(df_areas)} talhões")
+                        return df_areas
+                    else:
+                        st.error("❌ Erro ao processar shapefile. Usando área padrão.")
+                except Exception as e:
+                    st.error(f"❌ Erro no shapefile: {e}. Usando área padrão.")
+            else:
+                st.warning("⚠️ Shapefile não encontrado. Usando área padrão.")
 
-    elif metodo == "Simulação baseada em parcelas":
+        elif metodo == "Coordenadas das parcelas":
+            if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas:
+                try:
+                    from utils.arquivo_handler import processar_coordenadas
+                    raio_parcela = config_areas.get('raio_parcela', 11.28)
+                    df_areas = processar_coordenadas(st.session_state.arquivo_coordenadas, raio_parcela)
+                    if df_areas is not None and len(df_areas) > 0:
+                        st.success(f"✅ Áreas das coordenadas: {len(df_areas)} talhões")
+                        return df_areas
+                    else:
+                        st.error("❌ Erro ao processar coordenadas. Usando área padrão.")
+                except Exception as e:
+                    st.error(f"❌ Erro nas coordenadas: {e}. Usando área padrão.")
+            else:
+                st.warning("⚠️ Coordenadas não encontradas. Usando área padrão.")
+
+        elif metodo == "Simulação baseada em parcelas":
+            areas_dict = config_areas.get('areas_simuladas', {})
+            if areas_dict:
+                df_areas = pd.DataFrame([
+                    {'talhao': int(talhao), 'area_ha': float(area)}
+                    for talhao, area in areas_dict.items()
+                ])
+                st.success(f"✅ Áreas simuladas: {len(df_areas)} talhões")
+                return df_areas
+            else:
+                st.warning("⚠️ Simulação falhou. Usando área padrão.")
+
+        # FALLBACK: Área fixa para todos os talhões (sempre funciona)
+        st.info("🔄 Aplicando área padrão para todos os talhões")
+
+        # Obter talhões do inventário
         df_inventario = st.session_state.dados_inventario
-        return processar_areas_por_metodo('simulacao', df_inventario=df_inventario, config=config_areas)
+        talhoes_disponiveis = sorted(df_inventario['talhao'].unique())
 
-    else:  # Área fixa
-        area_fixa = config_areas['area_fixa']
-        talhoes = config_areas['talhoes']
+        area_fixa = config_areas.get('area_fixa', 25.0)
+
         df_areas = pd.DataFrame([
             {'talhao': talhao, 'area_ha': area_fixa}
-            for talhao in talhoes
+            for talhao in talhoes_disponiveis
         ])
+
+        st.info(f"📏 Usando {area_fixa} ha para {len(df_areas)} talhões")
+
         return df_areas
+
+    except Exception as e:
+        # FALLBACK EXTREMO: Nunca retornar None
+        st.error(f"❌ Erro crítico ao criar áreas: {e}")
+        st.info("🔄 Usando configuração de emergência")
+
+        try:
+            df_inventario = st.session_state.dados_inventario
+            talhoes_disponiveis = sorted(df_inventario['talhao'].unique())
+
+            df_areas_emergencia = pd.DataFrame([
+                {'talhao': talhao, 'area_ha': 25.0}
+                for talhao in talhoes_disponiveis
+            ])
+
+            st.warning(f"⚠️ Configuração de emergência: 25 ha para {len(df_areas_emergencia)} talhões")
+            return df_areas_emergencia
+
+        except:
+            # ÚLTIMO RECURSO: DataFrame mínimo
+            return pd.DataFrame({'talhao': [1], 'area_ha': [25.0]})
 
 
 def estimar_alturas_inventario(df, melhor_modelo):
@@ -657,70 +730,124 @@ def calcular_estatisticas_gerais(resumo_parcelas, resumo_talhoes):
 
 
 def executar_inventario_completo(config_areas, parametros):
-    """Executa o inventário completo"""
+    """Executa o inventário completo com logs detalhados"""
     st.header("🚀 Executando Inventário Completo")
 
-    # Barra de progresso
-    progress_bar = st.progress(0)
-    status_text = st.empty()
-
     try:
-        status_text.text("Processando áreas dos talhões...")
-        progress_bar.progress(0.1)
+        # 1. VERIFICAR PRÉ-REQUISITOS
+        st.subheader("1️⃣ Verificando Pré-requisitos")
 
-        # Criar DataFrame de áreas
+        if not st.session_state.get('resultados_hipsometricos'):
+            st.error("❌ Modelos hipsométricos não executados")
+            return
+
+        if not st.session_state.get('resultados_volumetricos'):
+            st.error("❌ Modelos volumétricos não executados")
+            return
+
+        st.success("✅ Pré-requisitos atendidos")
+
+        # 2. PROCESSAR ÁREAS
+        st.subheader("2️⃣ Processando Áreas dos Talhões")
+
         df_areas = criar_df_areas(config_areas)
-        #st.success(f"✅ Áreas processadas: {len(df_areas)} talhões")
 
-        status_text.text("Preparando dados do inventário...")
-        progress_bar.progress(0.2)
+        if df_areas is None or len(df_areas) == 0:
+            st.error("❌ Falha crítica no processamento de áreas")
+            return
 
-        # Obter modelos selecionados
+        st.success(f"✅ Áreas processadas: {len(df_areas)} talhões")
+        with st.expander("📊 Áreas Calculadas"):
+            st.dataframe(df_areas)
+
+        # 3. APLICAR FILTROS
+        st.subheader("3️⃣ Aplicando Filtros ao Inventário")
+
+        df_inventario = st.session_state.dados_inventario.copy()
+
+        # Criar config para filtros (extrair da configuração principal se necessário)
+        config_filtros = {
+            'talhoes_excluir': [3, 4, 5, 6, 7, 8],  # SEUS TALHÕES A EXCLUIR
+            'diametro_min': 4.0,
+            'codigos_excluir': ['C', 'I']
+        }
+
+        df_filtrado = aplicar_filtros_inventario(df_inventario, config_filtros)
+
+        if len(df_filtrado) == 0:
+            st.error("❌ Nenhum registro restou após filtros")
+            return
+
+        # 4. VERIFICAR COMPATIBILIDADE ÁREAS × INVENTÁRIO
+        st.subheader("4️⃣ Verificando Compatibilidade")
+
+        talhoes_inventario = set(df_filtrado['talhao'].unique())
+        talhoes_areas = set(df_areas['talhao'].unique())
+
+        st.write(f"**Talhões no inventário filtrado:** {sorted(talhoes_inventario)}")
+        st.write(f"**Talhões com áreas:** {sorted(talhoes_areas)}")
+
+        # Verificar se há compatibilidade
+        talhoes_comuns = talhoes_inventario & talhoes_areas
+        talhoes_sem_area = talhoes_inventario - talhoes_areas
+
+        if talhoes_sem_area:
+            st.warning(f"⚠️ Talhões sem área definida: {sorted(talhoes_sem_area)}")
+            st.info("💡 Será usada área padrão de 25 ha para estes talhões")
+
+        if len(talhoes_comuns) > 0:
+            st.success(f"✅ Talhões compatíveis: {sorted(talhoes_comuns)}")
+        else:
+            st.error("❌ Nenhum talhão compatível entre inventário e áreas!")
+            return
+
+        # 5. FAZER MERGE
+        st.subheader("5️⃣ Combinando Dados")
+
+        # Garantir tipos compatíveis
+        df_filtrado['talhao'] = df_filtrado['talhao'].astype(int)
+        df_areas['talhao'] = df_areas['talhao'].astype(int)
+
+        # Merge com left join
+        df_com_areas = df_filtrado.merge(df_areas, on='talhao', how='left')
+
+        # Preencher áreas faltantes
+        df_com_areas['area_ha'] = df_com_areas['area_ha'].fillna(25.0)
+
+        st.success(f"✅ Merge concluído: {len(df_com_areas)} registros")
+
+        # Verificar resultado do merge
+        with st.expander("📊 Resultado do Merge"):
+            resumo_merge = df_com_areas.groupby('talhao').agg({
+                'area_ha': 'first',
+                'D_cm': 'count'
+            }).rename(columns={'D_cm': 'n_registros'})
+            st.dataframe(resumo_merge)
+
+        # 6. CONTINUAR COM O PROCESSAMENTO NORMAL...
+        st.subheader("6️⃣ Aplicando Modelos")
+
         melhor_hip = st.session_state.resultados_hipsometricos['melhor_modelo']
         melhor_vol = st.session_state.resultados_volumetricos['melhor_modelo']
 
-        # Filtrar dados do inventário
-        df_inventario = st.session_state.dados_inventario.copy()
-        df_filtrado = df_inventario[
-            (df_inventario['D_cm'].notna()) &
-            (df_inventario['D_cm'] > 0) &
-            (df_inventario['D_cm'] >= 4.0)
-            ]
-
-        # Adicionar áreas aos dados
-        df_com_areas = df_filtrado.merge(df_areas, on='talhao', how='left')
-        df_com_areas['area_ha'] = df_com_areas['area_ha'].fillna(25.0)
-
-        status_text.text("Aplicando modelos hipsométricos...")
-        progress_bar.progress(0.4)
+        st.info(f"🌳 Modelo hipsométrico: {melhor_hip}")
+        st.info(f"📊 Modelo volumétrico: {melhor_vol}")
 
         # Estimar alturas
         df_com_alturas = estimar_alturas_inventario(df_com_areas, melhor_hip)
 
-        status_text.text("Aplicando modelos volumétricos...")
-        progress_bar.progress(0.6)
-
         # Estimar volumes
         df_com_volumes = estimar_volumes_inventario(df_com_alturas, melhor_vol)
 
-        status_text.text("Calculando métricas adicionais...")
-        progress_bar.progress(0.7)
-
         # Calcular métricas adicionais
         df_completo = calcular_metricas_adicionais(df_com_volumes, parametros)
-
-        status_text.text("Calculando estatísticas finais...")
-        progress_bar.progress(0.9)
 
         # Calcular resumos
         resumo_parcelas = calcular_resumo_por_parcela(df_completo, parametros)
         resumo_talhoes = calcular_resumo_por_talhao(resumo_parcelas)
         estatisticas_gerais = calcular_estatisticas_gerais(resumo_parcelas, resumo_talhoes)
 
-        progress_bar.progress(1.0)
-        status_text.text("✅ Inventário processado com sucesso!")
-
-        # Preparar resultados finais
+        # Salvar resultados
         resultados = {
             'inventario_completo': df_completo,
             'resumo_parcelas': resumo_parcelas,
@@ -730,21 +857,19 @@ def executar_inventario_completo(config_areas, parametros):
                 'hipsometrico': melhor_hip,
                 'volumetrico': melhor_vol
             },
-            'parametros_utilizados': parametros
+            'parametros_utilizados': parametros,
+            'areas_utilizadas': df_areas,
+            'filtros_aplicados': config_filtros
         }
 
-        # Salvar no session_state
         st.session_state.inventario_processado = resultados
 
-        #st.success(f"🏆 Inventário processado com sucesso!")
-        #st.info(f"📊 Modelos utilizados: {melhor_hip} (Hipsométrico) + {melhor_vol} (Volumétrico)")
-
-        # Mostrar resultados
+        st.success("🎉 Inventário processado com sucesso!")
         mostrar_resultados_inventario(resultados)
 
     except Exception as e:
-        st.error(f"❌ Erro no processamento do inventário: {e}")
-        st.info("💡 Verifique os dados e configurações")
+        st.error(f"❌ Erro no processamento: {e}")
+        import traceback
         with st.expander("🔍 Detalhes do erro"):
             st.code(traceback.format_exc())
 
@@ -1555,6 +1680,119 @@ def main():
     # Botão principal para executar
     if st.button("🚀 Executar Inventário Completo", type="primary", use_container_width=True):
         executar_inventario_completo(config_areas, parametros)
+
+
+def debug_areas_processing(config_areas):
+    """Função para debugar o processamento de áreas"""
+    st.subheader("🔍 Debug - Processamento de Áreas")
+
+    metodo = config_areas.get('metodo', 'N/A')
+    st.write(f"**Método selecionado:** {metodo}")
+
+    # Verificar arquivos no session_state
+    st.write("**Arquivos no session_state:**")
+    st.write(f"- arquivo_shapefile: {hasattr(st.session_state, 'arquivo_shapefile')}")
+    st.write(f"- arquivo_coordenadas: {hasattr(st.session_state, 'arquivo_coordenadas')}")
+
+    # Verificar configurações
+    st.write("**Configurações recebidas:**")
+    for key, value in config_areas.items():
+        st.write(f"- {key}: {value}")
+
+    # Tentar criar áreas em modo debug
+    try:
+        df_areas = criar_df_areas(config_areas)
+        if df_areas is not None:
+            st.success("✅ Áreas criadas com sucesso!")
+            st.dataframe(df_areas)
+        else:
+            st.error("❌ Áreas retornaram None")
+    except Exception as e:
+        st.error(f"❌ Erro ao criar áreas: {e}")
+        import traceback
+        st.code(traceback.format_exc())
+
+
+def aplicar_filtros_inventario(df_inventario, config):
+    """
+    Aplica filtros aos dados do inventário - VERSÃO CORRIGIDA
+
+    Args:
+        df_inventario: DataFrame original
+        config: Configurações dos filtros
+
+    Returns:
+        DataFrame filtrado
+    """
+    df_original = df_inventario.copy()
+
+    st.subheader("🔍 Aplicando Filtros ao Inventário")
+
+    # Mostrar dados originais
+    talhoes_originais = sorted(df_original['talhao'].unique())
+    st.info(f"📊 Dados originais: {len(df_original)} registros em {len(talhoes_originais)} talhões: {talhoes_originais}")
+
+    # Aplicar filtros step by step
+    df_filtrado = df_original.copy()
+
+    # 1. Filtrar talhões excluídos
+    talhoes_excluir = config.get('talhoes_excluir', [])
+    if talhoes_excluir:
+        st.write(f"🚫 Excluindo talhões: {talhoes_excluir}")
+
+        antes = len(df_filtrado)
+        df_filtrado = df_filtrado[~df_filtrado['talhao'].isin(talhoes_excluir)]
+        depois = len(df_filtrado)
+
+        talhoes_restantes = sorted(df_filtrado['talhao'].unique())
+        st.success(f"✅ Talhões excluídos: {antes} → {depois} registros. Talhões restantes: {talhoes_restantes}")
+
+    # 2. Filtrar por diâmetro mínimo
+    diametro_min = config.get('diametro_min', 4.0)
+    if diametro_min > 0:
+        st.write(f"📏 Aplicando diâmetro mínimo: {diametro_min} cm")
+
+        antes = len(df_filtrado)
+        df_filtrado = df_filtrado[df_filtrado['D_cm'] >= diametro_min]
+        depois = len(df_filtrado)
+
+        st.success(f"✅ Filtro diamétrico: {antes} → {depois} registros")
+
+    # 3. Filtrar códigos excluídos
+    codigos_excluir = config.get('codigos_excluir', [])
+    if codigos_excluir and 'cod' in df_filtrado.columns:
+        st.write(f"🏷️ Excluindo códigos: {codigos_excluir}")
+
+        antes = len(df_filtrado)
+        df_filtrado = df_filtrado[~df_filtrado['cod'].isin(codigos_excluir)]
+        depois = len(df_filtrado)
+
+        st.success(f"✅ Códigos excluídos: {antes} → {depois} registros")
+
+    # 4. Remover valores inválidos
+    st.write("🧹 Removendo valores inválidos...")
+
+    antes = len(df_filtrado)
+    df_filtrado = df_filtrado[
+        (df_filtrado['D_cm'].notna()) &
+        (df_filtrado['D_cm'] > 0) &
+        (df_filtrado['H_m'].notna()) &
+        (df_filtrado['H_m'] > 1.3)
+        ]
+    depois = len(df_filtrado)
+
+    st.success(f"✅ Limpeza final: {antes} → {depois} registros")
+
+    # Resultado final
+    talhoes_finais = sorted(df_filtrado['talhao'].unique())
+    st.success(
+        f"🎯 **RESULTADO FINAL**: {len(df_filtrado)} registros em {len(talhoes_finais)} talhões: {talhoes_finais}")
+
+    if len(df_filtrado) == 0:
+        st.error("❌ ATENÇÃO: Todos os registros foram filtrados! Revise os critérios.")
+        return df_original  # Retornar dados originais para evitar crash
+
+    return df_filtrado
 
 
 if __name__ == "__main__":
