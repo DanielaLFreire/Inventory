@@ -1,411 +1,557 @@
 # utils/arquivo_handler.py
-'''
-Funções para carregamento e processamento de arquivos
-'''
+"""
+Utilitário para carregar e processar diferentes tipos de arquivos
+Suporta CSV (com diferentes separadores), Excel e outros formatos
+"""
 
 import pandas as pd
 import streamlit as st
-from config.config import SEPARADORES_CSV, ENGINES_EXCEL
-import re
-import numpy as np
+import io
+import zipfile
+import tempfile
+import os
+from pathlib import Path
 
 
-def converter_dms_para_decimal(coord_dms):
+def detectar_separador_csv(conteudo_texto):
     """
-    Converte coordenadas DMS para decimal com tratamento robusto
+    Detecta automaticamente o separador de um arquivo CSV
 
     Args:
-        coord_dms: String no formato "22°57'23.38\"S"
+        conteudo_texto: Conteúdo do arquivo como string
 
     Returns:
-        float: Coordenada em formato decimal
+        str: Separador detectado
+    """
+    separadores = [';', ',', '\t', '|']
+    contadores = {}
+
+    # Analisar as primeiras 5 linhas
+    linhas = conteudo_texto.split('\n')[:5]
+    texto_amostra = '\n'.join(linhas)
+
+    for sep in separadores:
+        contadores[sep] = texto_amostra.count(sep)
+
+    # Retornar o separador mais comum
+    separador_detectado = max(contadores, key=contadores.get)
+
+    # Se nenhum separador foi encontrado em quantidade significativa, usar ';'
+    if contadores[separador_detectado] == 0:
+        return ';'
+
+    return separador_detectado
+
+
+def detectar_encoding_arquivo(arquivo_bytes):
+    """
+    Detecta encoding do arquivo
+
+    Args:
+        arquivo_bytes: Bytes do arquivo
+
+    Returns:
+        str: Encoding detectado
+    """
+    import chardet
+
+    try:
+        # Analisar uma amostra dos bytes
+        amostra = arquivo_bytes[:10000]  # Primeiros 10KB
+        resultado = chardet.detect(amostra)
+        encoding_detectado = resultado['encoding']
+
+        # Encodings comuns para fallback
+        encodings_fallback = ['utf-8', 'latin-1', 'cp1252', 'iso-8859-1']
+
+        if encoding_detectado and encoding_detectado.lower() not in ['ascii']:
+            return encoding_detectado
+        else:
+            return 'utf-8'  # Default seguro
+
+    except Exception:
+        return 'utf-8'
+
+
+def carregar_csv(arquivo, encoding=None, separador=None):
+    """
+    Carrega arquivo CSV com detecção automática de separador e encoding
+
+    Args:
+        arquivo: Arquivo uploaded pelo Streamlit
+        encoding: Encoding específico (opcional)
+        separador: Separador específico (opcional)
+
+    Returns:
+        DataFrame ou None se erro
     """
     try:
-        if pd.isna(coord_dms) or coord_dms == '':
-            return None
+        # Ler bytes do arquivo
+        arquivo_bytes = arquivo.read()
+        arquivo.seek(0)  # Reset para reutilizar
 
-        coord_str = str(coord_dms).strip()
+        # Detectar encoding se não especificado
+        if encoding is None:
+            encoding = detectar_encoding_arquivo(arquivo_bytes)
 
-        # Padrão regex mais flexível
-        pattern = r"(\d+)°(\d+)'([\d.]+)\"([NSEOOW])"
-        match = re.match(pattern, coord_str)
+        # Converter bytes para string
+        try:
+            conteudo_str = arquivo_bytes.decode(encoding)
+        except UnicodeDecodeError:
+            # Fallback para latin-1 que aceita qualquer byte
+            conteudo_str = arquivo_bytes.decode('latin-1')
+            encoding = 'latin-1'
 
-        if not match:
-            # Tentar padrão alternativo sem símbolos
-            pattern2 = r"(\d+)\s*(\d+)\s*([\d.]+)\s*([NSEOOW])"
-            match = re.match(pattern2, coord_str)
+        # Detectar separador se não especificado
+        if separador is None:
+            separador = detectar_separador_csv(conteudo_str)
 
-        if not match:
-            # Se ainda não funcionar, tentar apenas números
-            try:
-                return float(coord_str)
-            except:
-                return None
+        # Criar StringIO para pandas
+        buffer_str = io.StringIO(conteudo_str)
 
-        graus = float(match.group(1))
-        minutos = float(match.group(2))
-        segundos = float(match.group(3))
-        direcao = match.group(4).upper()
+        # Tentar carregar com pandas
+        df = pd.read_csv(
+            buffer_str,
+            sep=separador,
+            encoding=None,  # Já decodificamos
+            low_memory=False,
+            on_bad_lines='skip'  # Pular linhas problemáticas
+        )
 
-        # Converter para decimal
-        decimal = graus + (minutos / 60) + (segundos / 3600)
+        st.success(f"✅ CSV carregado: {len(df)} linhas, separador '{separador}', encoding '{encoding}'")
 
-        # Aplicar sinal baseado na direção
-        if direcao in ['S', 'O', 'W']:  # Sul ou Oeste = negativo
-            decimal = -decimal
-
-        return decimal
+        return df
 
     except Exception as e:
-        st.warning(f"⚠️ Erro ao converter coordenada '{coord_dms}': {e}")
+        st.error(f"❌ Erro ao carregar CSV: {e}")
+
+        # Tentar fallbacks
+        try:
+            st.info("🔄 Tentando métodos alternativos...")
+
+            # Fallback 1: Separadores comuns
+            for sep in [';', ',', '\t']:
+                try:
+                    arquivo.seek(0)
+                    df = pd.read_csv(arquivo, sep=sep, low_memory=False, on_bad_lines='skip')
+                    if len(df.columns) > 1:  # Se conseguiu separar em colunas
+                        st.success(f"✅ CSV carregado com separador '{sep}'")
+                        return df
+                except:
+                    continue
+
+            # Fallback 2: Sem separador específico (deixar pandas detectar)
+            arquivo.seek(0)
+            df = pd.read_csv(arquivo, low_memory=False, on_bad_lines='skip')
+            st.success(f"✅ CSV carregado com detecção automática")
+            return df
+
+        except Exception as fallback_error:
+            st.error(f"❌ Todos os métodos falharam: {fallback_error}")
+            return None
+
+
+def carregar_excel(arquivo):
+    """
+    Carrega arquivo Excel (.xlsx, .xls, .xlsb)
+
+    Args:
+        arquivo: Arquivo uploaded pelo Streamlit
+
+    Returns:
+        DataFrame ou None se erro
+    """
+    try:
+        # Detectar tipo de arquivo Excel
+        nome_arquivo = arquivo.name.lower()
+
+        if nome_arquivo.endswith('.xlsb'):
+            engine = 'pyxlsb'
+        elif nome_arquivo.endswith('.xls'):
+            engine = 'xlrd'
+        else:
+            engine = 'openpyxl'
+
+        # Tentar carregar
+        try:
+            df = pd.read_excel(arquivo, engine=engine)
+        except Exception as e:
+            # Fallback para outros engines
+            st.warning(f"⚠️ Engine {engine} falhou, tentando alternativas...")
+
+            engines_fallback = ['openpyxl', 'xlrd', 'pyxlsb']
+            for alt_engine in engines_fallback:
+                if alt_engine != engine:
+                    try:
+                        arquivo.seek(0)
+                        df = pd.read_excel(arquivo, engine=alt_engine)
+                        engine = alt_engine
+                        break
+                    except:
+                        continue
+            else:
+                raise e
+
+        st.success(f"✅ Excel carregado: {len(df)} linhas, engine '{engine}'")
+        return df
+
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar Excel: {e}")
         return None
 
 
-def converter_dms_para_decimal(coord_dms):
+def carregar_shapefile(arquivo_zip):
     """
-    Converte coordenadas DMS (Graus, Minutos, Segundos) para formato decimal
+    Carrega shapefile de um arquivo ZIP
 
     Args:
-        coord_dms: String no formato "22°57'23.38\"S" ou "49°14'4.46\"O"
+        arquivo_zip: Arquivo ZIP contendo shapefile
 
     Returns:
-        float: Coordenada em formato decimal
+        GeoDataFrame ou None se erro
     """
     try:
-        # Padrão regex para capturar graus, minutos, segundos e direção
-        pattern = r"(\d+)°(\d+)'([\d.]+)\"([NSEO])"
-        match = re.match(pattern, coord_dms.strip())
+        import geopandas as gpd
 
-        if not match:
-            return None
+        # Criar diretório temporário
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Extrair ZIP
+            with zipfile.ZipFile(io.BytesIO(arquivo_zip.read())) as zip_ref:
+                zip_ref.extractall(temp_dir)
 
-        graus = float(match.group(1))
-        minutos = float(match.group(2))
-        segundos = float(match.group(3))
-        direcao = match.group(4)
+            # Procurar arquivo .shp
+            shp_files = list(Path(temp_dir).glob("*.shp"))
 
-        # Converter para decimal
-        decimal = graus + (minutos / 60) + (segundos / 3600)
+            if not shp_files:
+                st.error("❌ Arquivo .shp não encontrado no ZIP")
+                return None
 
-        # Aplicar sinal baseado na direção
-        if direcao in ['S', 'O', 'W']:  # Sul ou Oeste = negativo
-            decimal = -decimal
+            # Carregar shapefile
+            gdf = gpd.read_file(shp_files[0])
 
-        return decimal
+            st.success(f"✅ Shapefile carregado: {len(gdf)} polígonos")
+            return gdf
 
+    except ImportError:
+        st.error("❌ GeoPandas não instalado. Instale com: pip install geopandas")
+        return None
     except Exception as e:
-        print(f"Erro ao converter {coord_dms}: {e}")
+        st.error(f"❌ Erro ao carregar shapefile: {e}")
         return None
 
 
 def carregar_arquivo(arquivo):
-    '''
-    Carrega arquivo CSV ou Excel com máxima compatibilidade
+    """
+    Função principal para carregar qualquer tipo de arquivo suportado
 
     Args:
-        arquivo: Arquivo uploaded via Streamlit
+        arquivo: Arquivo uploaded pelo Streamlit
 
     Returns:
-        DataFrame ou None se erro
-    '''
-    try:
-        if arquivo.name.endswith('.csv'):
-            return _carregar_csv(arquivo)
-        elif arquivo.name.endswith(('.xlsx', '.xls', '.xlsb')):
-            return _carregar_excel(arquivo)
-        else:
-            st.error("❌ Formato não suportado. Use .csv, .xlsx, .xls ou .xlsb")
-            return None
-    except Exception as e:
-        st.error(f"❌ Erro inesperado: {e}")
+        DataFrame ou GeoDataFrame
+    """
+    if arquivo is None:
         return None
 
+    try:
+        # Obter extensão do arquivo
+        nome_arquivo = arquivo.name.lower()
+        extensao = Path(nome_arquivo).suffix.lower()
 
-def _carregar_csv(arquivo):
-    '''Carrega arquivo CSV testando diferentes separadores - VERSÃO MELHORADA'''
+        # Log do arquivo sendo processado
+        st.info(f"📁 Processando: {arquivo.name} ({arquivo.size:,} bytes)")
 
-    # Lista de separadores em ordem de prioridade
-    separadores = [',', ';', '\t', '|']
+        # Roteamento por tipo de arquivo
+        if extensao == '.csv':
+            return carregar_csv(arquivo)
 
-    for sep in separadores:
-        try:
-            # Resetar ponteiro do arquivo
-            arquivo.seek(0)
+        elif extensao in ['.xlsx', '.xls', '.xlsb']:
+            return carregar_excel(arquivo)
 
-            # Tentar ler com encoding UTF-8
-            df = pd.read_csv(arquivo, sep=sep, encoding='utf-8')
-
-            # Verificar se o DataFrame é válido
-            if len(df.columns) > 1 and len(df) > 0:
-                st.success(f"✅ CSV carregado com separador '{sep}' e encoding UTF-8")
-                return df
-
-        except UnicodeDecodeError:
-            # Tentar com encoding latin-1
+        elif extensao == '.zip':
+            # Verificar se é shapefile
             try:
-                arquivo.seek(0)
-                df = pd.read_csv(arquivo, sep=sep, encoding='latin-1')
-                if len(df.columns) > 1 and len(df) > 0:
-                    st.success(f"✅ CSV carregado com separador '{sep}' e encoding latin-1")
-                    return df
+                with zipfile.ZipFile(io.BytesIO(arquivo.read())) as zip_ref:
+                    arquivos_no_zip = zip_ref.namelist()
+                    arquivo.seek(0)  # Reset
+
+                    # Se tem .shp, é shapefile
+                    if any(f.lower().endswith('.shp') for f in arquivos_no_zip):
+                        return carregar_shapefile(arquivo)
+                    else:
+                        st.error("❌ ZIP não contém shapefile (.shp)")
+                        return None
             except:
-                continue
-        except Exception as e:
-            continue
+                st.error("❌ Arquivo ZIP inválido")
+                return None
 
-    # Fallback com pandas padrão
-    try:
-        arquivo.seek(0)
-        df = pd.read_csv(arquivo)
-        if len(df.columns) > 0 and len(df) > 0:
-            st.warning("⚠️ CSV carregado com configuração padrão")
-            return df
-    except Exception as e:
-        st.error(f"❌ Erro final ao ler CSV: {e}")
-        return None
-
-
-def _carregar_excel(arquivo):
-    '''Carrega arquivo Excel testando diferentes engines'''
-    # Verificar engines disponíveis
-    engines_disponiveis = []
-
-    for engine in ENGINES_EXCEL:
-        try:
-            __import__(engine)
-            engines_disponiveis.append(engine)
-        except ImportError:
-            continue
-
-    # Tentar cada engine disponível
-    if engines_disponiveis:
-        for engine in engines_disponiveis:
-            try:
-                # Verificar compatibilidade engine/extensão
-                if arquivo.name.endswith('.xlsx') and engine == 'openpyxl':
-                    return pd.read_excel(arquivo, engine=engine)
-                elif arquivo.name.endswith('.xls') and engine == 'xlrd':
-                    return pd.read_excel(arquivo, engine=engine)
-                elif arquivo.name.endswith('.xlsb') and engine == 'pyxlsb':
-                    return pd.read_excel(arquivo, engine=engine)
-                else:
-                    # Tentar qualquer engine com qualquer arquivo
-                    return pd.read_excel(arquivo, engine=engine)
-            except Exception:
-                continue
-
-    # Tentativa final: pandas padrão
-    try:
-        return pd.read_excel(arquivo)
-    except Exception:
-        _mostrar_erro_excel(engines_disponiveis)
-        return None
-
-
-def _mostrar_erro_excel(engines_disponiveis):
-    '''Mostra mensagens de erro específicas para Excel'''
-    st.error("❌ Não foi possível ler o arquivo Excel")
-    st.error("🔧 **Soluções rápidas:**")
-
-    if not engines_disponiveis:
-        st.error("• Nenhuma engine Excel encontrada")
-        st.code("pip install openpyxl xlrd")
-    else:
-        st.error(f"• Engines disponíveis: {', '.join(engines_disponiveis)}")
-        st.error("• Arquivo pode estar corrompido ou em formato não suportado")
-
-    st.error("• **Alternativa**: Converta para CSV no Excel:")
-    st.error("  Arquivo → Salvar Como → CSV UTF-8")
-
-
-def processar_shapefile(arquivo_shp):
-    '''
-    Processa shapefile para extrair áreas dos talhões
-
-    Args:
-        arquivo_shp: Arquivo shapefile (.shp ou .zip)
-
-    Returns:
-        DataFrame com talhao e area_ha ou None se erro
-    '''
-    try:
-        import geopandas as gpd
-        import zipfile
-        import tempfile
-        import os
-
-        if arquivo_shp.name.endswith('.zip'):
-            # Processar ZIP
-            with tempfile.TemporaryDirectory() as temp_dir:
-                with zipfile.ZipFile(arquivo_shp, 'r') as zip_ref:
-                    zip_ref.extractall(temp_dir)
-
-                # Procurar arquivo .shp
-                shp_files = [f for f in os.listdir(temp_dir) if f.endswith('.shp')]
-                if shp_files:
-                    shp_path = os.path.join(temp_dir, shp_files[0])
-                    gdf = gpd.read_file(shp_path)
-                else:
-                    raise Exception("Arquivo .shp não encontrado no ZIP")
-        else:
-            # Arquivo .shp direto
-            gdf = gpd.read_file(arquivo_shp)
-
-        return _extrair_areas_shapefile(gdf)
-
-    except ImportError:
-        st.error("❌ GeoPandas não está instalado")
-        st.error("🔧 Execute: pip install geopandas")
-        return None
-    except Exception as e:
-        st.error(f"❌ Erro ao processar shapefile: {e}")
-        st.info("💡 Verifique se o arquivo contém colunas 'talhao' e 'area_ha'")
-        return None
-
-
-def _extrair_areas_shapefile(gdf):
-    '''Extrai áreas dos talhões do GeoDataFrame'''
-    from config.config import NOMES_ALTERNATIVOS
-
-    # Procurar coluna de talhão
-    col_talhao = None
-    for col in gdf.columns:
-        if col.lower() in NOMES_ALTERNATIVOS['talhao']:
-            col_talhao = col
-            break
-
-    if col_talhao is None:
-        raise Exception("Coluna de talhão não encontrada")
-
-    # Procurar coluna de área
-    col_area = None
-    for col in gdf.columns:
-        if col.lower() in NOMES_ALTERNATIVOS['area']:
-            col_area = col
-            break
-
-    if col_area is None:
-        # Calcular área da geometria
-        gdf['area_ha'] = gdf.geometry.area / 10000  # Converter m² para ha
-        col_area = 'area_ha'
-
-    # Agrupar por talhão e somar áreas
-    areas_df = gdf.groupby(col_talhao)[col_area].sum().reset_index()
-    areas_df.columns = ['talhao', 'area_ha']
-    areas_df['talhao'] = areas_df['talhao'].astype(int)
-
-    return areas_df
-
-
-def processar_coordenadas_dms(df_coord):
-    """
-    Processa arquivo de coordenadas com formato DMS
-
-    Args:
-        df_coord: DataFrame com coordenadas originais
-
-    Returns:
-        DataFrame com coordenadas convertidas para decimal
-    """
-    df_processado = df_coord.copy()
-
-    # Detectar se as coordenadas estão em formato DMS
-    primeira_lat = str(df_coord['latitude'].iloc[0])
-    primeira_lon = str(df_coord['longitude'].iloc[0])
-
-    if '°' in primeira_lat and '°' in primeira_lon:
-        print("🔄 Coordenadas em formato DMS detectadas. Convertendo para decimal...")
-
-        # Converter latitude
-        df_processado['latitude_decimal'] = df_coord['latitude'].apply(converter_dms_para_decimal)
-
-        # Converter longitude
-        df_processado['longitude_decimal'] = df_coord['longitude'].apply(converter_dms_para_decimal)
-
-        # Substituir colunas originais
-        df_processado['latitude'] = df_processado['latitude_decimal']
-        df_processado['longitude'] = df_processado['longitude_decimal']
-
-        # Remover colunas temporárias
-        df_processado = df_processado.drop(['latitude_decimal', 'longitude_decimal'], axis=1)
-
-        print("✅ Conversão DMS → Decimal concluída!")
-
-        # Mostrar exemplos
-        print(f"Exemplo: {primeira_lat} → {df_processado['latitude'].iloc[0]:.6f}")
-        print(f"Exemplo: {primeira_lon} → {df_processado['longitude'].iloc[0]:.6f}")
-
-    else:
-        print("ℹ️ Coordenadas já estão em formato decimal")
-
-    return df_processado
-
-
-def processar_coordenadas(arquivo_coord, raio_parcela):
-    '''
-    Processa coordenadas para calcular áreas dos talhões - VERSÃO CORRIGIDA
-    '''
-    try:
-        # Carregar arquivo com função melhorada
-        df_coord = carregar_arquivo(arquivo_coord)
-        if df_coord is None:
-            st.error("❌ Não foi possível carregar o arquivo de coordenadas")
+        elif extensao == '.shp':
+            st.error(
+                "❌ Para shapefiles, faça upload do arquivo ZIP contendo todos os componentes (.shp, .shx, .dbf, etc.)")
             return None
 
-        st.info(f"📊 Arquivo carregado: {len(df_coord)} registros, {len(df_coord.columns)} colunas")
-
-        # Mostrar preview dos dados
-        with st.expander("👀 Preview dos dados carregados"):
-            st.dataframe(df_coord.head())
-            st.write("Colunas:", list(df_coord.columns))
-
-        # Verificar se as coordenadas estão em formato DMS
-        primeira_lat = str(df_coord['latitude'].iloc[0])
-        if '°' in primeira_lat:
-            st.info("🔄 Convertendo coordenadas DMS para decimal...")
-
-            # Converter coordenadas
-            df_coord['lat_decimal'] = df_coord['latitude'].apply(converter_dms_para_decimal)
-            df_coord['lon_decimal'] = df_coord['longitude'].apply(converter_dms_para_decimal)
-
-            # Verificar conversões válidas
-            validas_lat = df_coord['lat_decimal'].notna().sum()
-            validas_lon = df_coord['lon_decimal'].notna().sum()
-
-            st.success(
-                f"✅ Conversão concluída: {validas_lat}/{len(df_coord)} latitudes, {validas_lon}/{len(df_coord)} longitudes")
-
-            if validas_lat == 0 or validas_lon == 0:
-                st.error("❌ Nenhuma coordenada foi convertida com sucesso")
-                return None
         else:
-            # Coordenadas já em decimal
-            df_coord['lat_decimal'] = pd.to_numeric(df_coord['latitude'], errors='coerce')
-            df_coord['lon_decimal'] = pd.to_numeric(df_coord['longitude'], errors='coerce')
-
-        # Limpar nomes dos talhões para números
-        df_coord['talhao_num'] = df_coord['talhao'].astype(str).str.extract(r'(\d+)').astype(int)
-
-        # Calcular área da parcela
-        area_parcela_ha = np.pi * (raio_parcela ** 2) / 10000
-
-        # Contar parcelas por talhão
-        parcelas_por_talhao = df_coord.groupby('talhao_num').size().reset_index()
-        parcelas_por_talhao.columns = ['talhao', 'num_parcelas']
-        parcelas_por_talhao['area_ha'] = parcelas_por_talhao['num_parcelas'] * area_parcela_ha
-
-        st.success(f"✅ Áreas calculadas: {len(parcelas_por_talhao)} talhões")
-        st.info(f"📐 Área por parcela: {area_parcela_ha:.4f} ha (raio {raio_parcela}m)")
-
-        # Mostrar resultado
-        with st.expander("📊 Resultado do cálculo de áreas"):
-            st.dataframe(parcelas_por_talhao)
-            st.metric("Área Total", f"{parcelas_por_talhao['area_ha'].sum():.3f} ha")
-
-        return parcelas_por_talhao[['talhao', 'area_ha']]
+            st.error(f"❌ Extensão não suportada: {extensao}")
+            st.info("📋 Formatos suportados: CSV, Excel (.xlsx, .xls, .xlsb), Shapefile (.zip)")
+            return None
 
     except Exception as e:
-        st.error(f"❌ Erro ao processar coordenadas: {e}")
-        import traceback
-        st.code(traceback.format_exc())
+        st.error(f"❌ Erro geral ao carregar arquivo: {e}")
+        with st.expander("🔍 Detalhes do erro"):
+            st.code(str(e))
         return None
+
+
+def validar_estrutura_arquivo(df, colunas_obrigatorias, nome_tipo="arquivo"):
+    """
+    Valida se o DataFrame possui as colunas obrigatórias
+
+    Args:
+        df: DataFrame a ser validado
+        colunas_obrigatorias: Lista de colunas obrigatórias
+        nome_tipo: Nome do tipo de arquivo para mensagens
+
+    Returns:
+        dict: Resultado da validação
+    """
+    if df is None:
+        return {
+            'valido': False,
+            'erros': [f"{nome_tipo} não foi carregado"],
+            'alertas': []
+        }
+
+    resultado = {
+        'valido': True,
+        'erros': [],
+        'alertas': []
+    }
+
+    # Verificar se DataFrame não está vazio
+    if len(df) == 0:
+        resultado['erros'].append(f"{nome_tipo} está vazio")
+        resultado['valido'] = False
+        return resultado
+
+    # Verificar colunas obrigatórias
+    colunas_faltantes = []
+    for coluna in colunas_obrigatorias:
+        if coluna not in df.columns:
+            colunas_faltantes.append(coluna)
+
+    if colunas_faltantes:
+        resultado['erros'].append(f"Colunas obrigatórias faltantes: {colunas_faltantes}")
+        resultado['valido'] = False
+
+    # Verificar se há dados válidos nas colunas obrigatórias
+    for coluna in colunas_obrigatorias:
+        if coluna in df.columns:
+            valores_nulos = df[coluna].isna().sum()
+            total_linhas = len(df)
+
+            if valores_nulos == total_linhas:
+                resultado['erros'].append(f"Coluna '{coluna}' está completamente vazia")
+                resultado['valido'] = False
+            elif valores_nulos > total_linhas * 0.5:
+                resultado['alertas'].append(
+                    f"Coluna '{coluna}' tem muitos valores nulos ({valores_nulos}/{total_linhas})")
+
+    return resultado
+
+
+def exportar_dataframe(df, formato='csv', nome_base="dados_exportados"):
+    """
+    Exporta DataFrame em diferentes formatos
+
+    Args:
+        df: DataFrame a ser exportado
+        formato: Formato de exportação ('csv', 'excel', 'json')
+        nome_base: Nome base do arquivo
+
+    Returns:
+        tuple: (dados_bytes, nome_arquivo, mime_type)
+    """
+    try:
+        if formato.lower() == 'csv':
+            # CSV com separador ponto e vírgula (padrão brasileiro)
+            dados = df.to_csv(index=False, sep=';', encoding='utf-8')
+            nome_arquivo = f"{nome_base}.csv"
+            mime_type = "text/csv"
+
+        elif formato.lower() == 'excel':
+            # Excel
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df.to_excel(writer, index=False, sheet_name='Dados')
+            dados = buffer.getvalue()
+            nome_arquivo = f"{nome_base}.xlsx"
+            mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+        elif formato.lower() == 'json':
+            # JSON
+            dados = df.to_json(orient='records', indent=2, force_ascii=False)
+            nome_arquivo = f"{nome_base}.json"
+            mime_type = "application/json"
+
+        else:
+            raise ValueError(f"Formato não suportado: {formato}")
+
+        return dados, nome_arquivo, mime_type
+
+    except Exception as e:
+        st.error(f"❌ Erro ao exportar dados: {e}")
+        return None, None, None
+
+
+def criar_template_csv(colunas, nome_arquivo="template"):
+    """
+    Cria template CSV com colunas especificadas
+
+    Args:
+        colunas: Lista de nomes das colunas
+        nome_arquivo: Nome do arquivo template
+
+    Returns:
+        str: Conteúdo CSV do template
+    """
+    # Criar DataFrame vazio com as colunas
+    df_template = pd.DataFrame(columns=colunas)
+
+    # Adicionar uma linha de exemplo (valores fictícios)
+    if colunas:
+        exemplo = {}
+        for coluna in colunas:
+            if 'D_cm' in coluna or 'dap' in coluna.lower():
+                exemplo[coluna] = 15.5
+            elif 'H_m' in coluna or 'altura' in coluna.lower():
+                exemplo[coluna] = 18.2
+            elif 'talhao' in coluna.lower():
+                exemplo[coluna] = 1
+            elif 'parcela' in coluna.lower():
+                exemplo[coluna] = 1
+            elif 'cod' in coluna.lower():
+                exemplo[coluna] = 'D'
+            elif 'idade' in coluna.lower():
+                exemplo[coluna] = 5
+            elif 'arv' in coluna.lower():
+                exemplo[coluna] = 1
+            else:
+                exemplo[coluna] = 'exemplo'
+
+        df_exemplo = pd.DataFrame([exemplo])
+        df_template = pd.concat([df_template, df_exemplo], ignore_index=True)
+
+    return df_template.to_csv(index=False, sep=';')
+
+
+def verificar_qualidade_dados(df, nome_tipo="dados"):
+    """
+    Verifica qualidade geral dos dados
+
+    Args:
+        df: DataFrame a ser analisado
+        nome_tipo: Nome do tipo de dados
+
+    Returns:
+        dict: Relatório de qualidade
+    """
+    if df is None or len(df) == 0:
+        return {
+            'qualidade_geral': 'Ruim',
+            'problemas': ['DataFrame vazio ou nulo'],
+            'sugestoes': ['Verificar arquivo de entrada']
+        }
+
+    relatorio = {
+        'total_linhas': len(df),
+        'total_colunas': len(df.columns),
+        'problemas': [],
+        'sugestoes': [],
+        'detalhes_colunas': {}
+    }
+
+    # Analisar cada coluna
+    for coluna in df.columns:
+        detalhes = {
+            'tipo': str(df[coluna].dtype),
+            'valores_nulos': df[coluna].isna().sum(),
+            'valores_unicos': df[coluna].nunique(),
+            'percentual_nulos': (df[coluna].isna().sum() / len(df)) * 100
+        }
+
+        # Identificar problemas
+        if detalhes['percentual_nulos'] > 50:
+            relatorio['problemas'].append(f"Coluna '{coluna}' tem >50% valores nulos")
+
+        if detalhes['valores_unicos'] == 1:
+            relatorio['problemas'].append(f"Coluna '{coluna}' tem valor constante")
+
+        relatorio['detalhes_colunas'][coluna] = detalhes
+
+    # Classificar qualidade geral
+    num_problemas = len(relatorio['problemas'])
+    if num_problemas == 0:
+        relatorio['qualidade_geral'] = 'Excelente'
+    elif num_problemas <= 2:
+        relatorio['qualidade_geral'] = 'Boa'
+    elif num_problemas <= 5:
+        relatorio['qualidade_geral'] = 'Regular'
+    else:
+        relatorio['qualidade_geral'] = 'Ruim'
+
+    # Gerar sugestões
+    if relatorio['problemas']:
+        relatorio['sugestoes'].append("Revisar colunas com muitos valores nulos")
+        relatorio['sugestoes'].append("Verificar consistência dos dados de entrada")
+
+    return relatorio
+
+
+# Funções auxiliares para tipos específicos de arquivo
+
+def normalizar_nomes_colunas(df):
+    """
+    Normaliza nomes das colunas removendo espaços e caracteres especiais
+
+    Args:
+        df: DataFrame
+
+    Returns:
+        DataFrame com colunas normalizadas
+    """
+    df_normalizado = df.copy()
+
+    # Dicionário de mapeamento comum
+    mapeamento_comum = {
+        'diametro': 'D_cm',
+        'dap': 'D_cm',
+        'altura': 'H_m',
+        'height': 'H_m',
+        'talhão': 'talhao',
+        'stand': 'talhao',
+        'plot': 'parcela',
+        'codigo': 'cod',
+        'code': 'cod',
+        'idade': 'idade_anos',
+        'age': 'idade_anos',
+        'arvore': 'arv',
+        'tree': 'arv'
+    }
+
+    # Normalizar nomes
+    nomes_novos = {}
+    for coluna in df.columns:
+        nome_limpo = str(coluna).strip().lower()
+        nome_limpo = nome_limpo.replace(' ', '_').replace('-', '_')
+
+        # Verificar mapeamento comum
+        for padrao, nome_padrao in mapeamento_comum.items():
+            if padrao in nome_limpo:
+                nomes_novos[coluna] = nome_padrao
+                break
+        else:
+            nomes_novos[coluna] = nome_limpo
+
+    df_normalizado = df_normalizado.rename(columns=nomes_novos)
+
+    return df_normalizado

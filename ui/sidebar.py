@@ -1,19 +1,213 @@
-# ui/sidebar.py - VERSÃO AJUSTADA PARA CONFIGURAÇÕES GLOBAIS
+# ui/sidebar.py - VERSÃO MELHORADA INTEGRADA COM PRINCIPAL.PY
 '''
-Interface da barra lateral para upload de arquivos - Versão integrada com configurações globais
-NOVO: Melhor integração com sistema de configurações centralizadas
+Interface da barra lateral para upload de arquivos - Versão integrada completa
+Inclui funcionalidades do Principal.py para processamento automático
 '''
 
 import streamlit as st
+import pandas as pd
+import traceback
+
+# Importar processadores
+from utils.arquivo_handler import carregar_arquivo, validar_estrutura_arquivo
+from utils.formatacao import formatar_brasileiro, formatar_numero_inteligente
+
+
+def processar_dados_inventario_sidebar(arquivo_inventario):
+    """
+    Processa dados do inventário na sidebar com feedback completo
+
+    Args:
+        arquivo_inventario: Arquivo de inventário carregado
+
+    Returns:
+        DataFrame processado ou None se erro
+    """
+    try:
+        if arquivo_inventario is None:
+            return None
+
+        # Carregar arquivo
+        df_inventario = carregar_arquivo(arquivo_inventario)
+
+        if df_inventario is None:
+            st.sidebar.error("❌ Falha no carregamento")
+            return None
+
+        # Validar estrutura básica
+        colunas_obrigatorias = ['D_cm', 'H_m', 'talhao', 'parcela']
+        validacao = validar_estrutura_arquivo(df_inventario, colunas_obrigatorias, "inventário")
+
+        if not validacao['valido']:
+            st.sidebar.error("❌ Estrutura inválida")
+            for erro in validacao['erros'][:2]:  # Mostrar apenas 2 primeiros erros na sidebar
+                st.sidebar.error(f"• {erro}")
+            return None
+
+        # Limpar e validar dados
+        df_limpo = limpar_dados_inventario_sidebar(df_inventario)
+
+        if len(df_limpo) == 0:
+            st.sidebar.error("❌ Sem dados válidos")
+            return None
+
+        # Feedback de sucesso
+        percentual_mantido = (len(df_limpo) / len(df_inventario)) * 100
+        st.sidebar.success(f"✅ Inventário OK")
+        st.sidebar.info(f"📊 {len(df_limpo):,} registros ({percentual_mantido:.1f}%)")
+
+        return df_limpo
+
+    except Exception as e:
+        st.sidebar.error(f"❌ Erro: {str(e)[:50]}...")
+        return None
+
+
+def processar_dados_cubagem_sidebar(arquivo_cubagem):
+    """
+    Processa dados de cubagem na sidebar com feedback completo
+
+    Args:
+        arquivo_cubagem: Arquivo de cubagem carregado
+
+    Returns:
+        DataFrame processado ou None se erro
+    """
+    try:
+        if arquivo_cubagem is None:
+            return None
+
+        # Carregar arquivo
+        df_cubagem = carregar_arquivo(arquivo_cubagem)
+
+        if df_cubagem is None:
+            st.sidebar.error("❌ Falha no carregamento")
+            return None
+
+        # Validar estrutura básica
+        colunas_obrigatorias = ['arv', 'talhao', 'd_cm', 'h_m', 'D_cm', 'H_m']
+        validacao = validar_estrutura_arquivo(df_cubagem, colunas_obrigatorias, "cubagem")
+
+        if not validacao['valido']:
+            st.sidebar.error("❌ Estrutura inválida")
+            for erro in validacao['erros'][:2]:
+                st.sidebar.error(f"• {erro}")
+            return None
+
+        # Limpar e validar dados
+        df_limpo = limpar_dados_cubagem_sidebar(df_cubagem)
+
+        if len(df_limpo) == 0:
+            st.sidebar.error("❌ Sem dados válidos")
+            return None
+
+        # Feedback de sucesso
+        arvores_cubadas = df_limpo['arv'].nunique()
+        st.sidebar.success(f"✅ Cubagem OK")
+        st.sidebar.info(f"📏 {arvores_cubadas} árvores cubadas")
+
+        return df_limpo
+
+    except Exception as e:
+        st.sidebar.error(f"❌ Erro: {str(e)[:50]}...")
+        return None
+
+
+def limpar_dados_inventario_sidebar(df_inventario):
+    """Versão otimizada da limpeza para sidebar"""
+    df_limpo = df_inventario.copy()
+
+    # Converter tipos básicos
+    try:
+        df_limpo['D_cm'] = pd.to_numeric(df_limpo['D_cm'], errors='coerce')
+        df_limpo['H_m'] = pd.to_numeric(df_limpo['H_m'], errors='coerce')
+        df_limpo['talhao'] = pd.to_numeric(df_limpo['talhao'], errors='coerce').astype('Int64')
+        df_limpo['parcela'] = pd.to_numeric(df_limpo['parcela'], errors='coerce').astype('Int64')
+
+        if 'idade_anos' in df_limpo.columns:
+            df_limpo['idade_anos'] = pd.to_numeric(df_limpo['idade_anos'], errors='coerce')
+
+        if 'cod' in df_limpo.columns:
+            df_limpo['cod'] = df_limpo['cod'].astype(str)
+
+    except Exception:
+        pass  # Continuar mesmo com problemas de conversão
+
+    # Filtros básicos de qualidade
+    mask_valido = (
+            df_limpo['D_cm'].notna() &
+            df_limpo['H_m'].notna() &
+            df_limpo['talhao'].notna() &
+            df_limpo['parcela'].notna() &
+            (df_limpo['D_cm'] > 0) &
+            (df_limpo['H_m'] > 1.3)
+    )
+
+    df_limpo = df_limpo[mask_valido]
+
+    # Remover outliers extremos (apenas os mais óbvios)
+    try:
+        # DAP entre 1 e 100 cm (limites muito amplos)
+        df_limpo = df_limpo[(df_limpo['D_cm'] >= 1) & (df_limpo['D_cm'] <= 100)]
+
+        # Altura entre 1.3 e 60 m (limites muito amplos)
+        df_limpo = df_limpo[(df_limpo['H_m'] >= 1.3) & (df_limpo['H_m'] <= 60)]
+
+    except Exception:
+        pass
+
+    return df_limpo
+
+
+def limpar_dados_cubagem_sidebar(df_cubagem):
+    """Versão otimizada da limpeza para sidebar"""
+    df_limpo = df_cubagem.copy()
+
+    # Converter tipos básicos
+    try:
+        df_limpo['arv'] = pd.to_numeric(df_limpo['arv'], errors='coerce').astype('Int64')
+        df_limpo['talhao'] = pd.to_numeric(df_limpo['talhao'], errors='coerce').astype('Int64')
+        df_limpo['d_cm'] = pd.to_numeric(df_limpo['d_cm'], errors='coerce')
+        df_limpo['h_m'] = pd.to_numeric(df_limpo['h_m'], errors='coerce')
+        df_limpo['D_cm'] = pd.to_numeric(df_limpo['D_cm'], errors='coerce')
+        df_limpo['H_m'] = pd.to_numeric(df_limpo['H_m'], errors='coerce')
+
+    except Exception:
+        pass
+
+    # Filtros básicos de qualidade
+    mask_valido = (
+            df_limpo['arv'].notna() &
+            df_limpo['talhao'].notna() &
+            df_limpo['d_cm'].notna() &
+            df_limpo['h_m'].notna() &
+            df_limpo['D_cm'].notna() &
+            df_limpo['H_m'].notna() &
+            (df_limpo['d_cm'] > 0) &
+            (df_limpo['h_m'] > 0) &
+            (df_limpo['D_cm'] > 0) &
+            (df_limpo['H_m'] > 1.3)
+    )
+
+    df_limpo = df_limpo[mask_valido]
+
+    # Validação de consistência básica
+    try:
+        mask_consistente = df_limpo['d_cm'] <= df_limpo['D_cm'] * 1.5  # Tolerância ampla
+        df_limpo = df_limpo[mask_consistente]
+    except Exception:
+        pass
+
+    return df_limpo
 
 
 def criar_sidebar():
     '''
-    Cria a interface da barra lateral com uploads e status das etapas
-    ATUALIZADO: Melhor integração com configurações globais
+    Cria a interface da barra lateral com uploads e processamento automático
+    VERSÃO INTEGRADA com funcionalidades do Principal.py
 
     Returns:
-        dict: Dicionário com os arquivos carregados
+        dict: Dicionário com os arquivos carregados e processados
     '''
     st.sidebar.header("📁 Upload de Dados")
 
@@ -21,14 +215,16 @@ def criar_sidebar():
     arquivo_inventario = st.sidebar.file_uploader(
         "📋 Arquivo de Inventário",
         type=['csv', 'xlsx', 'xls'],
-        help="Dados de parcelas (D_cm, H_m, talhao, parcela, cod, idade_anos)"
+        help="Dados de parcelas (D_cm, H_m, talhao, parcela, cod, idade_anos)",
+        key="upload_inventario_principal"
     )
 
     # Upload do arquivo de cubagem
     arquivo_cubagem = st.sidebar.file_uploader(
         "📏 Arquivo de Cubagem",
         type=['csv', 'xlsx', 'xls'],
-        help="Medições detalhadas (arv, talhao, d_cm, h_m, D_cm, H_m)"
+        help="Medições detalhadas (arv, talhao, d_cm, h_m, D_cm, H_m)",
+        key="upload_cubagem_principal"
     )
 
     # Upload opcional de shapefile para áreas COM PERSISTÊNCIA
@@ -39,15 +235,13 @@ def criar_sidebar():
         key="upload_shapefile_persistente"
     )
 
-    # Armazenar shapefile no session_state de forma segura
-    try:
-        if arquivo_shapefile is not None:
-            st.session_state.arquivo_shapefile = arquivo_shapefile
-            st.sidebar.success(f"✅ Shapefile salvo: {arquivo_shapefile.name}")
-        elif not hasattr(st.session_state, 'arquivo_shapefile'):
-            st.session_state.arquivo_shapefile = None
-    except Exception as e:
-        st.sidebar.error(f"Erro ao salvar shapefile: {e}")
+    # Gerenciar persistência do shapefile
+    if arquivo_shapefile is not None:
+        st.session_state.arquivo_shapefile = arquivo_shapefile
+        st.sidebar.success(f"✅ Shapefile salvo")
+        st.sidebar.caption(f"📄 {arquivo_shapefile.name}")
+    elif not hasattr(st.session_state, 'arquivo_shapefile'):
+        st.session_state.arquivo_shapefile = None
 
     # Upload opcional de coordenadas COM PERSISTÊNCIA
     arquivo_coordenadas = st.sidebar.file_uploader(
@@ -57,42 +251,125 @@ def criar_sidebar():
         key="upload_coordenadas_persistente"
     )
 
-    # Armazenar coordenadas no session_state de forma segura
-    try:
-        if arquivo_coordenadas is not None:
-            st.session_state.arquivo_coordenadas = arquivo_coordenadas
-            st.sidebar.success(f"✅ Coordenadas salvas: {arquivo_coordenadas.name}")
-        elif not hasattr(st.session_state, 'arquivo_coordenadas'):
-            st.session_state.arquivo_coordenadas = None
-    except Exception as e:
-        st.sidebar.error(f"Erro ao salvar coordenadas: {e}")
+    # Gerenciar persistência das coordenadas
+    if arquivo_coordenadas is not None:
+        st.session_state.arquivo_coordenadas = arquivo_coordenadas
+        st.sidebar.success(f"✅ Coordenadas salvas")
+        st.sidebar.caption(f"📄 {arquivo_coordenadas.name}")
+    elif not hasattr(st.session_state, 'arquivo_coordenadas'):
+        st.session_state.arquivo_coordenadas = None
 
-    arquivos = {
-        'inventario': arquivo_inventario,
-        'cubagem': arquivo_cubagem,
-        'shapefile': arquivo_shapefile,
-        'coordenadas': arquivo_coordenadas
+    # PROCESSAMENTO AUTOMÁTICO DOS DADOS
+    dados_processados = {
+        'inventario': None,
+        'cubagem': None,
+        'shapefile': arquivo_shapefile if arquivo_shapefile else st.session_state.arquivo_shapefile,
+        'coordenadas': arquivo_coordenadas if arquivo_coordenadas else st.session_state.arquivo_coordenadas
     }
 
-    # Mostrar status dos arquivos
-    mostrar_status_arquivos(arquivos)
+    # Processar inventário se carregado
+    if arquivo_inventario is not None:
+        with st.sidebar.expander("🔄 Processando Inventário..."):
+            dados_processados['inventario'] = processar_dados_inventario_sidebar(arquivo_inventario)
 
-    # NOVO: Mostrar status das configurações globais na sidebar
+            # Salvar no session_state se processado com sucesso
+            if dados_processados['inventario'] is not None:
+                st.session_state.dados_inventario = dados_processados['inventario']
+
+    # Processar cubagem se carregada
+    if arquivo_cubagem is not None:
+        with st.sidebar.expander("🔄 Processando Cubagem..."):
+            dados_processados['cubagem'] = processar_dados_cubagem_sidebar(arquivo_cubagem)
+
+            # Salvar no session_state se processado com sucesso
+            if dados_processados['cubagem'] is not None:
+                st.session_state.dados_cubagem = dados_processados['cubagem']
+
+    # Mostrar status dos arquivos
+    mostrar_status_arquivos_melhorado(dados_processados)
+
+    # Mostrar status das configurações globais na sidebar
     mostrar_status_configuracao_sidebar()
 
     # Mostrar progresso das etapas na sidebar
     mostrar_progresso_etapas_sidebar()
 
-    # Mostrar informações adicionais
-    mostrar_informacoes_adicionais()
+    # Mostrar informações adicionais e ações rápidas
+    mostrar_informacoes_e_acoes_sidebar()
 
-    return arquivos
+    return dados_processados
+
+
+def mostrar_status_arquivos_melhorado(arquivos):
+    '''
+    Mostra status detalhado dos arquivos carregados e processados
+    '''
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📊 Status dos Dados")
+
+    # Inventário
+    if arquivos['inventario'] is not None:
+        st.sidebar.success("✅ Inventário processado")
+
+        df_inv = arquivos['inventario']
+        st.sidebar.info(f"📊 {len(df_inv):,} registros")
+        st.sidebar.info(f"🌳 {df_inv['talhao'].nunique()} talhões")
+
+        # Estatísticas rápidas
+        dap_medio = df_inv['D_cm'].mean()
+        altura_media = df_inv['H_m'].mean()
+        st.sidebar.caption(f"DAP: {formatar_brasileiro(dap_medio, 1)} cm")
+        st.sidebar.caption(f"Altura: {formatar_brasileiro(altura_media, 1)} m")
+
+    elif hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
+        st.sidebar.info("✅ Inventário carregado")
+        df_inv = st.session_state.dados_inventario
+        st.sidebar.caption(f"📊 {len(df_inv):,} registros")
+    else:
+        st.sidebar.error("❌ Inventário necessário")
+
+    # Cubagem
+    if arquivos['cubagem'] is not None:
+        st.sidebar.success("✅ Cubagem processada")
+
+        df_cub = arquivos['cubagem']
+        arvores = df_cub['arv'].nunique()
+        secoes_media = df_cub.groupby(['talhao', 'arv']).size().mean()
+
+        st.sidebar.info(f"📏 {arvores} árvores")
+        st.sidebar.caption(f"Seções/árvore: {formatar_brasileiro(secoes_media, 1)}")
+
+    elif hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
+        st.sidebar.info("✅ Cubagem carregada")
+        df_cub = st.session_state.dados_cubagem
+        arvores = df_cub['arv'].nunique()
+        st.sidebar.caption(f"📏 {arvores} árvores")
+    else:
+        st.sidebar.error("❌ Cubagem necessária")
+
+    # Arquivos opcionais
+    st.sidebar.markdown("**Arquivos Opcionais:**")
+
+    # Shapefile
+    shapefile_ativo = arquivos['shapefile']
+    if shapefile_ativo is not None:
+        st.sidebar.info("📁 Shapefile ativo")
+        st.sidebar.caption(f"📄 {shapefile_ativo.name}")
+    else:
+        st.sidebar.warning("📁 Shapefile: Não carregado")
+
+    # Coordenadas
+    coordenadas_ativas = arquivos['coordenadas']
+    if coordenadas_ativas is not None:
+        st.sidebar.info("📍 Coordenadas ativas")
+        st.sidebar.caption(f"📄 {coordenadas_ativas.name}")
+    else:
+        st.sidebar.warning("📍 Coordenadas: Não carregadas")
 
 
 def mostrar_status_configuracao_sidebar():
-    '''NOVO: Mostra status da configuração global na sidebar'''
+    '''Mostra status da configuração global na sidebar'''
     try:
-        # Importar aqui para evitar importação circular
         from config.configuracoes_globais import obter_configuracao_global
 
         config_global = obter_configuracao_global()
@@ -107,13 +384,12 @@ def mostrar_status_configuracao_sidebar():
             # Mostrar timestamp da última configuração
             timestamp = config_global.get('timestamp_config')
             if timestamp:
-                import pandas as pd
-                if isinstance(timestamp, pd.Timestamp):
+                if hasattr(timestamp, 'strftime'):
                     st.sidebar.caption(f"Atualizado: {timestamp.strftime('%H:%M')}")
                 else:
                     st.sidebar.caption("Configurado nesta sessão")
 
-            # NOVO: Mostrar resumo das configurações principais
+            # Mostrar resumo das configurações principais
             with st.sidebar.expander("📋 Resumo Config"):
                 # Filtros básicos
                 st.write(f"🔍 **Filtros:**")
@@ -129,11 +405,11 @@ def mostrar_status_configuracao_sidebar():
                 metodo_area = config_global.get('metodo_area', 'Simular automaticamente')
                 st.write(f"📏 **Área:** {metodo_area[:15]}...")
 
-                # NOVO: Status dos modelos não-lineares
+                # Status dos modelos não-lineares
                 incluir_nao_lineares = config_global.get('incluir_nao_lineares', True)
                 st.write(f"🧮 **Modelos:** {'Lineares+NL' if incluir_nao_lineares else 'Só Lineares'}")
 
-                # NOVO: Mostrar se parâmetros foram customizados
+                # Verificar se parâmetros foram customizados
                 parametros_customizados = verificar_parametros_customizados(config_global)
                 if parametros_customizados:
                     st.success("🔧 Parâmetros customizados")
@@ -148,12 +424,13 @@ def mostrar_status_configuracao_sidebar():
                 st.switch_page("pages/0_⚙️_Configurações.py")
 
     except ImportError:
-        # Se não conseguir importar configurações, mostrar aviso simples
         st.sidebar.warning("⚠️ Configurações não disponíveis")
+    except Exception as e:
+        st.sidebar.warning(f"⚠️ Erro nas configurações: {str(e)[:30]}...")
 
 
 def verificar_parametros_customizados(config):
-    '''NOVO: Verifica se parâmetros não-lineares foram customizados'''
+    '''Verifica se parâmetros não-lineares foram customizados'''
     parametros_padrao = {
         'parametros_chapman': {'b0': 42.12, 'b1': 0.01, 'b2': 1.00},
         'parametros_weibull': {'a': 42.12, 'b': 0.01, 'c': 1.00},
@@ -168,62 +445,12 @@ def verificar_parametros_customizados(config):
     return False
 
 
-def mostrar_status_arquivos(arquivos):
-    '''
-    Mostra o status dos arquivos carregados - VERSÃO MELHORADA
-    '''
-    st.sidebar.subheader("📊 Status dos Arquivos")
-
-    # Inventário
-    if arquivos['inventario'] is not None:
-        st.sidebar.success("✅ Inventário carregado")
-        st.sidebar.caption(f"📄 {arquivos['inventario'].name}")
-    else:
-        st.sidebar.error("❌ Inventário necessário")
-
-    # Cubagem
-    if arquivos['cubagem'] is not None:
-        st.sidebar.success("✅ Cubagem carregada")
-        st.sidebar.caption(f"📄 {arquivos['cubagem'].name}")
-    else:
-        st.sidebar.error("❌ Cubagem necessária")
-
-    # Seção para arquivos opcionais
-    st.sidebar.markdown("**Arquivos Opcionais:**")
-
-    # Shapefile - Verificar tanto upload atual quanto session_state
-    shapefile_ativo = None
-    if arquivos['shapefile'] is not None:
-        shapefile_ativo = arquivos['shapefile']
-    elif hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
-        shapefile_ativo = st.session_state.arquivo_shapefile
-
-    if shapefile_ativo is not None:
-        st.sidebar.info("📁 Shapefile ativo")
-        st.sidebar.caption(f"📄 {shapefile_ativo.name}")
-    else:
-        st.sidebar.warning("📁 Shapefile: Não carregado")
-
-    # Coordenadas - Verificar tanto upload atual quanto session_state
-    coordenadas_ativas = None
-    if arquivos['coordenadas'] is not None:
-        coordenadas_ativas = arquivos['coordenadas']
-    elif hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
-        coordenadas_ativas = st.session_state.arquivo_coordenadas
-
-    if coordenadas_ativas is not None:
-        st.sidebar.info("📍 Coordenadas ativas")
-        st.sidebar.caption(f"📄 {coordenadas_ativas.name}")
-    else:
-        st.sidebar.warning("📍 Coordenadas: Não carregadas")
-
-
 def mostrar_progresso_etapas_sidebar():
-    '''Mostra o progresso das etapas na sidebar - VERSÃO ATUALIZADA'''
+    '''Mostra o progresso das etapas na sidebar com melhorias'''
     st.sidebar.markdown("---")
     st.sidebar.subheader("🔄 Progresso das Etapas")
 
-    # NOVO: Verificar configurações primeiro (importação segura)
+    # Verificar configurações primeiro
     config_status = False
     try:
         from config.configuracoes_globais import obter_configuracao_global
@@ -240,36 +467,37 @@ def mostrar_progresso_etapas_sidebar():
 
     # Verificar session states de forma segura
     etapas_info = [
-        ('resultados_hipsometricos', 'Etapa 1 - Hipsométricos'),
-        ('resultados_volumetricos', 'Etapa 2 - Volumétricos'),
-        ('inventario_processado', 'Etapa 3 - Inventário')
+        ('resultados_hipsometricos', 'Etapa 1 - Hipsométricos', '🌳'),
+        ('resultados_volumetricos', 'Etapa 2 - Volumétricos', '📊'),
+        ('inventario_processado', 'Etapa 3 - Inventário', '📈')
     ]
 
     etapas_concluidas = 0
 
-    for state_key, nome_etapa in etapas_info:
+    for state_key, nome_etapa, icone in etapas_info:
         try:
             resultado = getattr(st.session_state, state_key, None)
 
             if resultado is not None:
                 st.sidebar.success(f"✅ **{nome_etapa}**")
 
-                # NOVO: Mostrar mais detalhes dos resultados
+                # Mostrar detalhes dos resultados
                 if isinstance(resultado, dict):
                     melhor = resultado.get('melhor_modelo', 'N/A')
                     if melhor != 'N/A':
                         st.sidebar.caption(f"🏆 Melhor: {melhor}")
 
-                    # NOVO: Mostrar se configuração foi aplicada
-                    config_aplicada = resultado.get('config_aplicada')
-                    if config_aplicada and config_aplicada.get('configurado', False):
-                        st.sidebar.caption("⚙️ Config aplicada")
+                    # Mostrar qualidade se disponível
+                    if 'resultados' in resultado and melhor in resultado['resultados']:
+                        r2 = resultado['resultados'][melhor].get('r2', resultado['resultados'][melhor].get('r2g', 0))
+                        if r2 > 0:
+                            st.sidebar.caption(f"📊 R²: {formatar_brasileiro(r2, 3)}")
 
                 etapas_concluidas += 1
             else:
                 st.sidebar.info(f"⏳ **{nome_etapa}**")
 
-                # NOVO: Mostrar dependências
+                # Mostrar dependências
                 if state_key == 'resultados_hipsometricos' and not config_status:
                     st.sidebar.caption("Precisa: Configuração")
                 elif state_key == 'resultados_volumetricos' and not config_status:
@@ -291,12 +519,15 @@ def mostrar_progresso_etapas_sidebar():
 
         if etapas_concluidas == total_etapas:
             st.sidebar.success("🎉 Análise Completa!")
+            st.sidebar.balloons()
         elif etapas_concluidas >= 2:
             st.sidebar.info("🚀 Quase lá! Falta 1 etapa")
 
 
-def mostrar_informacoes_adicionais():
-    '''Mostra informações adicionais na sidebar - VERSÃO ATUALIZADA'''
+def mostrar_informacoes_e_acoes_sidebar():
+    '''Mostra informações e ações rápidas na sidebar'''
+
+    # Seção de informações
     st.sidebar.markdown("---")
     st.sidebar.subheader("ℹ️ Informações")
 
@@ -309,63 +540,12 @@ def mostrar_informacoes_adicionais():
     **Tamanho máximo:**
     - 200MB por arquivo
 
-    **Encoding:**
-    - UTF-8 recomendado
+    **Processamento:**
+    - ✅ Automático na sidebar
+    - ✅ Validação em tempo real
+    - ✅ Feedback imediato
     ''')
 
-    # Informações sobre configurações centralizadas
-    with st.sidebar.expander("⚙️ Sistema de Configurações"):
-        st.markdown('''
-        **Configurações Centralizadas:**
-        - ✅ Configure uma vez (Etapa 0)
-        - ✅ Aplica em todas as etapas
-        - ✅ Parâmetros dos modelos não-lineares
-        - ✅ Filtros de dados globais
-        - ✅ Configurações de área
-
-        **Vantagens:**
-        - Consistência total
-        - Fácil de usar
-        - Transparente
-        - Rastreável
-        ''')
-
-    # Informações sobre persistência de arquivos
-    with st.sidebar.expander("💾 Persistência de Arquivos"):
-        st.markdown('''
-        **Arquivos Obrigatórios:**
-        - Recarregados a cada navegação
-        - Use sempre os mesmos arquivos
-
-        **Arquivos Opcionais:**
-        - ✅ Ficam salvos na sessão
-        - ✅ Persistem entre páginas
-        - ✅ Detectados nas configurações
-
-        **Dica:** Carregue shapefile/coordenadas uma vez e navegue livremente!
-        ''')
-
-    # NOVO: Dicas sobre parâmetros não-lineares
-    with st.sidebar.expander("🔧 Modelos Não-Lineares"):
-        st.markdown('''
-        **Parâmetros Configuráveis:**
-        - Chapman: b₀, b₁, b₂
-        - Weibull: a, b, c
-        - Mononuclear: a, b, c
-
-        **Dicas de Configuração:**
-        - Altura assintótica: 20-50m típico
-        - Começar com valores padrão
-        - Ajustar baseado na convergência
-        - Monitorar relatórios de qualidade
-        ''')
-
-    # Mostrar ações rápidas se necessário
-    mostrar_acoes_rapidas_sidebar()
-
-
-def mostrar_acoes_rapidas_sidebar():
-    '''Seção de ações rápidas na sidebar - VERSÃO ATUALIZADA'''
     # Verificar se há resultados para mostrar ações
     tem_resultados = False
     try:
@@ -385,7 +565,7 @@ def mostrar_acoes_rapidas_sidebar():
         col1, col2 = st.sidebar.columns(2)
 
         with col1:
-            if st.button("🔄 Limpar", use_container_width=True, key="limpar_resultados"):
+            if st.button("🔄 Limpar", use_container_width=True, key="limpar_resultados_sidebar"):
                 keys_para_limpar = [
                     'resultados_hipsometricos',
                     'resultados_volumetricos',
@@ -400,11 +580,11 @@ def mostrar_acoes_rapidas_sidebar():
                 st.rerun()
 
         with col2:
-            if st.button("📊 Relatório", use_container_width=True, key="gerar_relatorio_rapido"):
+            if st.button("📊 Relatório", use_container_width=True, key="gerar_relatorio_rapido_sidebar"):
                 st.switch_page("pages/3_📈_Inventário_Florestal.py")
 
-        # NOVO: Botão para reconfigurar sistema
-        if st.button("⚙️ Reconfigurar Sistema", use_container_width=True, key="reconfigurar_sistema"):
+        # Botão para reconfigurar sistema
+        if st.sidebar.button("⚙️ Reconfigurar Sistema", use_container_width=True, key="reconfigurar_sistema_sidebar"):
             st.switch_page("pages/0_⚙️_Configurações.py")
 
         # Download rápido se inventário foi processado
@@ -414,7 +594,7 @@ def mostrar_acoes_rapidas_sidebar():
             if inventario_resultado is not None and isinstance(inventario_resultado, dict):
                 if 'resumo_talhoes' in inventario_resultado:
                     resumo_df = inventario_resultado['resumo_talhoes']
-                    csv_dados = resumo_df.to_csv(index=False)
+                    csv_dados = resumo_df.to_csv(index=False, sep=';')
 
                     st.sidebar.download_button(
                         "📥 Download Resumo",
@@ -424,15 +604,15 @@ def mostrar_acoes_rapidas_sidebar():
                         use_container_width=True,
                         help="Download rápido do resumo por talhões"
                     )
-        except:
+        except Exception:
             pass
 
-    # NOVO: Mostrar dicas contextuais baseadas no estado
-    mostrar_dicas_contextuais()
+    # Mostrar dicas contextuais
+    mostrar_dicas_contextuais_sidebar()
 
 
-def mostrar_dicas_contextuais():
-    '''NOVO: Dicas contextuais baseadas no estado atual do sistema'''
+def mostrar_dicas_contextuais_sidebar():
+    '''Dicas contextuais baseadas no estado atual do sistema'''
     st.sidebar.markdown("---")
 
     # Determinar contexto atual
@@ -448,6 +628,14 @@ def mostrar_dicas_contextuais():
         configurado = config_global.get('configurado', False)
     except:
         pass
+
+    # Verificar etapas executadas
+    hip_executado = hasattr(st.session_state,
+                            'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None
+    vol_executado = hasattr(st.session_state,
+                            'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None
+    inv_executado = hasattr(st.session_state,
+                            'inventario_processado') and st.session_state.inventario_processado is not None
 
     # Dicas baseadas no contexto
     if not dados_carregados:
@@ -468,29 +656,87 @@ def mostrar_dicas_contextuais():
         - Configurações de área
         - Tolerâncias de ajuste
         ''')
-    else:
+    elif not hip_executado and not vol_executado:
         st.sidebar.success('''
         **✅ Sistema Pronto:**
-        Execute as Etapas 1, 2 e 3 em qualquer ordem.
+        Execute as Etapas 1, 2 e 3.
 
         **Configurações aplicam automaticamente:**
         - Filtros globais
         - Parâmetros não-lineares
         - Validações automáticas
-        - Relatórios com configurações
         ''')
+    elif hip_executado and vol_executado and not inv_executado:
+        st.sidebar.info('''
+        **🎯 Finalize:**
+        Execute a Etapa 3 para gerar o inventário final com relatórios completos.
+        ''')
+    elif inv_executado:
+        st.sidebar.success('''
+        **🎉 Análise Completa:**
+        Todos os modelos foram executados!
+
+        **Disponível:**
+        - Relatórios completos
+        - Downloads organizados
+        - Gráficos detalhados
+        ''')
+
+    # Informações sobre arquivos opcionais
+    with st.sidebar.expander("📁 Arquivos Opcionais"):
+        st.markdown('''
+        **Shapefile:**
+        - Upload na sidebar
+        - Fica persistente na sessão
+        - Habilita método avançado de área
+
+        **Coordenadas:**
+        - Upload na sidebar  
+        - Fica persistente na sessão
+        - Cálculo preciso de áreas por GPS
+
+        **Vantagem:** Carregue uma vez e navegue livremente entre as páginas!
+        ''')
+
+
+def mostrar_metricas_rapidas_sidebar():
+    '''Mostra métricas rápidas dos dados carregados'''
+    if hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
+        df_inv = st.session_state.dados_inventario
+
+        with st.sidebar.expander("📊 Métricas Rápidas"):
+            col1, col2 = st.sidebar.columns(2)
+
+            with col1:
+                st.metric("Registros", f"{len(df_inv):,}")
+                st.metric("Talhões", df_inv['talhao'].nunique())
+
+            with col2:
+                dap_medio = df_inv['D_cm'].mean()
+                altura_media = df_inv['H_m'].mean()
+                st.metric("DAP Médio", f"{formatar_brasileiro(dap_medio, 1)} cm")
+                st.metric("Alt. Média", f"{formatar_brasileiro(altura_media, 1)} m")
+
+            # Gráfico de distribuição simples
+            if st.checkbox("📈 Distribuições", key="show_dist_sidebar"):
+                st.write("**DAP (cm):**")
+                st.bar_chart(df_inv['D_cm'].value_counts().head(10))
 
 
 def criar_sidebar_melhorada():
     '''
-    Versão melhorada da sidebar com integração total às configurações globais
+    Versão melhorada da sidebar com processamento automático e feedback completo
 
     Returns:
-        dict: Dicionário com os arquivos carregados
+        dict: Dicionário com os arquivos carregados e processados
     '''
     try:
-        # Criar sidebar principal
+        # Criar sidebar principal com processamento automático
         arquivos = criar_sidebar()
+
+        # Mostrar métricas rápidas se dados estão carregados
+        mostrar_metricas_rapidas_sidebar()
+
         return arquivos
 
     except Exception as e:
@@ -504,7 +750,56 @@ def criar_sidebar_melhorada():
         }
 
 
-# Função de compatibilidade (manter para não quebrar código existente)
+# Funções de compatibilidade para manter código existente funcionando
 def mostrar_status_configuracao_sidebar_compat():
     '''Função de compatibilidade para o código existente'''
     return mostrar_status_configuracao_sidebar()
+
+
+def criar_sidebar_compat():
+    '''Função de compatibilidade que mantém interface original'''
+    return criar_sidebar_melhorada()
+
+
+# Função utilitária para verificar status geral do sistema
+def obter_status_sistema_completo():
+    '''
+    Obtém status completo do sistema para uso em outras páginas
+
+    Returns:
+        dict: Status completo do sistema
+    '''
+    status = {
+        'dados_inventario': hasattr(st.session_state,
+                                    'dados_inventario') and st.session_state.dados_inventario is not None,
+        'dados_cubagem': hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None,
+        'configurado': False,
+        'hip_executado': hasattr(st.session_state,
+                                 'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None,
+        'vol_executado': hasattr(st.session_state,
+                                 'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None,
+        'inv_executado': hasattr(st.session_state,
+                                 'inventario_processado') and st.session_state.inventario_processado is not None,
+        'shapefile_disponivel': hasattr(st.session_state,
+                                        'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None,
+        'coordenadas_disponiveis': hasattr(st.session_state,
+                                           'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None
+    }
+
+    # Verificar configuração
+    try:
+        from config.configuracoes_globais import obter_configuracao_global
+        config_global = obter_configuracao_global()
+        status['configurado'] = config_global.get('configurado', False)
+    except:
+        pass
+
+    # Calcular progresso geral
+    etapas_base = [status['dados_inventario'] and status['dados_cubagem'], status['configurado']]
+    etapas_analise = [status['hip_executado'], status['vol_executado'], status['inv_executado']]
+
+    status['progresso_base'] = sum(etapas_base) / len(etapas_base)
+    status['progresso_analise'] = sum(etapas_analise) / len(etapas_analise)
+    status['progresso_total'] = (sum(etapas_base) + sum(etapas_analise)) / (len(etapas_base) + len(etapas_analise))
+
+    return status

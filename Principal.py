@@ -1,493 +1,539 @@
-# Principal.py - VERSÃO ATUALIZADA COM CONFIGURAÇÕES CENTRALIZADAS
+# Principal.py
 """
-Sistema Integrado de Inventário Florestal
-Hub Central de Navegação com Configurações Centralizadas
+Sistema Integrado de Inventário Florestal - GreenVista
+Página principal do sistema com upload de dados e navegação
 """
 
 import streamlit as st
 import pandas as pd
-from ui.sidebar import criar_sidebar, mostrar_status_arquivos
-from utils.arquivo_handler import carregar_arquivo
-from ui.sidebar import criar_sidebar_melhorada
+import numpy as np
+import traceback
+import warnings
 
-# NOVO: Importar configurações centralizadas
+warnings.filterwarnings('ignore')
+
+# Importar componentes do sistema
+from ui.sidebar import criar_sidebar_melhorada
+from ui.components import (
+    configurar_pagina_greenvista,
+    criar_cabecalho_greenvista,
+    criar_navegacao_rapida_botoes,
+    criar_secao_instrucoes,
+    mostrar_alertas_sistema
+)
+
+# Importar processadores
+from utils.arquivo_handler import carregar_arquivo
 from config.configuracoes_globais import (
     inicializar_configuracoes_globais,
-    mostrar_status_configuracao_sidebar,
-    obter_configuracao_global
+    obter_configuracao_global,
+    aplicar_filtros_configuracao_global
 )
 
-# Configuração da página
-st.set_page_config(
-    page_title="Sistema de Inventário Florestal",
-    page_icon="🌲",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# Configurar página
+configurar_pagina_greenvista("Página Principal", "🌲")
 
 
-def inicializar_session_state():
-    """Inicializa estados do sistema"""
-    estados_iniciais = {
-        'dados_inventario': None,
-        'dados_cubagem': None,
-        'arquivos_carregados': False,
-        'resultados_hipsometricos': None,
-        'resultados_volumetricos': None,
-        'inventario_processado': None,
-        'config_sistema': {}
-    }
-
-    for estado, valor_inicial in estados_iniciais.items():
-        if estado not in st.session_state:
-            st.session_state[estado] = valor_inicial
-
-    # NOVO: Inicializar configurações globais
-    inicializar_configuracoes_globais()
-
-
-def processar_uploads_com_persistencia(arquivos):
+def processar_dados_inventario(arquivo_inventario):
     """
-    Processa uploads mantendo persistência - VERSÃO CORRIGIDA
+    Processa e valida dados do inventário florestal
+
+    Args:
+        arquivo_inventario: Arquivo de inventário carregado
+
+    Returns:
+        DataFrame processado ou None se erro
     """
-    arquivos_processados = False
+    try:
+        if arquivo_inventario is None:
+            return None
 
-    # Processar inventário (sempre reprocessar se upload novo)
-    if arquivos['inventario'] is not None:
-        try:
-            df_inventario = carregar_arquivo(arquivos['inventario'])
-            if df_inventario is not None:
-                st.session_state.dados_inventario = df_inventario
-                st.sidebar.success(f"✅ Inventário: {len(df_inventario)} registros")
-                arquivos_processados = True
-        except Exception as e:
-            st.sidebar.error(f"Erro ao carregar inventário: {e}")
+        # Carregar arquivo
+        with st.spinner("🔄 Carregando dados de inventário..."):
+            df_inventario = carregar_arquivo(arquivo_inventario)
 
-    # Processar cubagem (sempre reprocessar se upload novo)
-    if arquivos['cubagem'] is not None:
-        try:
-            df_cubagem = carregar_arquivo(arquivos['cubagem'])
-            if df_cubagem is not None:
-                st.session_state.dados_cubagem = df_cubagem
-                st.sidebar.success(f"✅ Cubagem: {len(df_cubagem)} medições")
-                if arquivos_processados:
-                    st.session_state.arquivos_carregados = True
-        except Exception as e:
-            st.sidebar.error(f"Erro ao carregar cubagem: {e}")
+        if df_inventario is None:
+            st.error("❌ Não foi possível carregar o arquivo de inventário")
+            return None
 
-    # CORREÇÃO: Verificar se dados ainda existem mesmo sem upload novo
-    if (not arquivos_processados and
-            hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None and
-            hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None):
-        # Dados já estão carregados de sessão anterior
-        st.session_state.arquivos_carregados = True
-        arquivos_processados = True
+        # Validar estrutura básica
+        colunas_obrigatorias = ['D_cm', 'H_m', 'talhao', 'parcela']
+        colunas_faltantes = [col for col in colunas_obrigatorias if col not in df_inventario.columns]
 
-        # Mostrar status dos dados existentes
-        st.sidebar.info(f"📊 Inventário ativo: {len(st.session_state.dados_inventario)} registros")
-        st.sidebar.info(f"📏 Cubagem ativa: {len(st.session_state.dados_cubagem)} medições")
+        if colunas_faltantes:
+            st.error(f"❌ Colunas obrigatórias faltantes: {colunas_faltantes}")
+            mostrar_colunas_disponiveis(df_inventario)
+            return None
 
-    # Arquivos opcionais já são gerenciados pela sidebar melhorada
-    # Verificar se estão disponíveis no session_state
-    shapefile_disponivel = (
-            hasattr(st.session_state, 'arquivo_shapefile') and
-            st.session_state.arquivo_shapefile is not None
+        # Limpar e validar dados
+        df_limpo = limpar_dados_inventario(df_inventario)
+
+        if len(df_limpo) == 0:
+            st.error("❌ Nenhum registro válido após limpeza dos dados")
+            return None
+
+        # Mostrar estatísticas
+        mostrar_estatisticas_inventario(df_limpo, df_inventario)
+
+        st.success(f"✅ Inventário processado: {len(df_limpo)} registros válidos")
+
+        return df_limpo
+
+    except Exception as e:
+        st.error(f"❌ Erro ao processar inventário: {e}")
+        with st.expander("🔍 Detalhes do erro"):
+            st.code(traceback.format_exc())
+        return None
+
+
+def processar_dados_cubagem(arquivo_cubagem):
+    """
+    Processa e valida dados de cubagem
+
+    Args:
+        arquivo_cubagem: Arquivo de cubagem carregado
+
+    Returns:
+        DataFrame processado ou None se erro
+    """
+    try:
+        if arquivo_cubagem is None:
+            return None
+
+        # Carregar arquivo
+        with st.spinner("🔄 Carregando dados de cubagem..."):
+            df_cubagem = carregar_arquivo(arquivo_cubagem)
+
+        if df_cubagem is None:
+            st.error("❌ Não foi possível carregar o arquivo de cubagem")
+            return None
+
+        # Validar estrutura básica
+        colunas_obrigatorias = ['arv', 'talhao', 'd_cm', 'h_m', 'D_cm', 'H_m']
+        colunas_faltantes = [col for col in colunas_obrigatorias if col not in df_cubagem.columns]
+
+        if colunas_faltantes:
+            st.error(f"❌ Colunas obrigatórias faltantes: {colunas_faltantes}")
+            mostrar_colunas_disponiveis(df_cubagem)
+            return None
+
+        # Limpar e validar dados
+        df_limpo = limpar_dados_cubagem(df_cubagem)
+
+        if len(df_limpo) == 0:
+            st.error("❌ Nenhum registro válido após limpeza dos dados")
+            return None
+
+        # Mostrar estatísticas
+        mostrar_estatisticas_cubagem(df_limpo, df_cubagem)
+
+        st.success(f"✅ Cubagem processada: {len(df_limpo)} registros válidos")
+
+        return df_limpo
+
+    except Exception as e:
+        st.error(f"❌ Erro ao processar cubagem: {e}")
+        with st.expander("🔍 Detalhes do erro"):
+            st.code(traceback.format_exc())
+        return None
+
+
+def limpar_dados_inventario(df_inventario):
+    """
+    Limpa e valida dados do inventário
+
+    Args:
+        df_inventario: DataFrame bruto do inventário
+
+    Returns:
+        DataFrame limpo
+    """
+    df_limpo = df_inventario.copy()
+
+    # Converter colunas para tipos apropriados
+    try:
+        df_limpo['D_cm'] = pd.to_numeric(df_limpo['D_cm'], errors='coerce')
+        df_limpo['H_m'] = pd.to_numeric(df_limpo['H_m'], errors='coerce')
+        df_limpo['talhao'] = pd.to_numeric(df_limpo['talhao'], errors='coerce').astype('Int64')
+        df_limpo['parcela'] = pd.to_numeric(df_limpo['parcela'], errors='coerce').astype('Int64')
+
+        # Idade se disponível
+        if 'idade_anos' in df_limpo.columns:
+            df_limpo['idade_anos'] = pd.to_numeric(df_limpo['idade_anos'], errors='coerce')
+
+        # Código se disponível
+        if 'cod' in df_limpo.columns:
+            df_limpo['cod'] = df_limpo['cod'].astype(str)
+
+    except Exception as e:
+        st.warning(f"⚠️ Problema na conversão de tipos: {e}")
+
+    # Remover registros inválidos
+    mask_valido = (
+            df_limpo['D_cm'].notna() &
+            df_limpo['H_m'].notna() &
+            df_limpo['talhao'].notna() &
+            df_limpo['parcela'].notna() &
+            (df_limpo['D_cm'] > 0) &
+            (df_limpo['H_m'] > 1.3)  # Altura mínima realística
     )
 
-    coordenadas_disponivel = (
-            hasattr(st.session_state, 'arquivo_coordenadas') and
-            st.session_state.arquivo_coordenadas is not None
+    df_limpo = df_limpo[mask_valido]
+
+    # Remover outliers extremos
+    try:
+        # Outliers de DAP (usando IQR)
+        Q1_dap = df_limpo['D_cm'].quantile(0.25)
+        Q3_dap = df_limpo['D_cm'].quantile(0.75)
+        IQR_dap = Q3_dap - Q1_dap
+        limite_inf_dap = Q1_dap - 3 * IQR_dap
+        limite_sup_dap = Q3_dap + 3 * IQR_dap
+
+        # Outliers de altura
+        Q1_h = df_limpo['H_m'].quantile(0.25)
+        Q3_h = df_limpo['H_m'].quantile(0.75)
+        IQR_h = Q3_h - Q1_h
+        limite_inf_h = Q1_h - 3 * IQR_h
+        limite_sup_h = Q3_h + 3 * IQR_h
+
+        # Aplicar filtros de outliers
+        mask_outliers = (
+                (df_limpo['D_cm'] >= limite_inf_dap) &
+                (df_limpo['D_cm'] <= limite_sup_dap) &
+                (df_limpo['H_m'] >= limite_inf_h) &
+                (df_limpo['H_m'] <= limite_sup_h)
+        )
+
+        df_limpo = df_limpo[mask_outliers]
+
+    except Exception as e:
+        st.warning(f"⚠️ Problema na remoção de outliers: {e}")
+
+    return df_limpo
+
+
+def limpar_dados_cubagem(df_cubagem):
+    """
+    Limpa e valida dados de cubagem
+
+    Args:
+        df_cubagem: DataFrame bruto da cubagem
+
+    Returns:
+        DataFrame limpo
+    """
+    df_limpo = df_cubagem.copy()
+
+    # Converter colunas para tipos apropriados
+    try:
+        df_limpo['arv'] = pd.to_numeric(df_limpo['arv'], errors='coerce').astype('Int64')
+        df_limpo['talhao'] = pd.to_numeric(df_limpo['talhao'], errors='coerce').astype('Int64')
+        df_limpo['d_cm'] = pd.to_numeric(df_limpo['d_cm'], errors='coerce')
+        df_limpo['h_m'] = pd.to_numeric(df_limpo['h_m'], errors='coerce')
+        df_limpo['D_cm'] = pd.to_numeric(df_limpo['D_cm'], errors='coerce')
+        df_limpo['H_m'] = pd.to_numeric(df_limpo['H_m'], errors='coerce')
+
+    except Exception as e:
+        st.warning(f"⚠️ Problema na conversão de tipos: {e}")
+
+    # Remover registros inválidos
+    mask_valido = (
+            df_limpo['arv'].notna() &
+            df_limpo['talhao'].notna() &
+            df_limpo['d_cm'].notna() &
+            df_limpo['h_m'].notna() &
+            df_limpo['D_cm'].notna() &
+            df_limpo['H_m'].notna() &
+            (df_limpo['d_cm'] > 0) &
+            (df_limpo['h_m'] > 0) &
+            (df_limpo['D_cm'] > 0) &
+            (df_limpo['H_m'] > 1.3)
     )
 
-    # Mostrar status dos arquivos persistidos sem reprocessar
-    if shapefile_disponivel:
-        st.sidebar.info(f"📁 Shapefile ativo: {st.session_state.arquivo_shapefile.name}")
+    df_limpo = df_limpo[mask_valido]
 
-    if coordenadas_disponivel:
-        st.sidebar.info(f"📍 Coordenadas ativas: {st.session_state.arquivo_coordenadas.name}")
+    # Validar consistência (diâmetro da seção <= DAP)
+    mask_consistente = df_limpo['d_cm'] <= df_limpo['D_cm'] * 1.2  # Tolerância de 20%
+    df_limpo = df_limpo[mask_consistente]
 
-    return st.session_state.get('arquivos_carregados', False)
-
-
-def mostrar_progresso_sistema():
-    """Mostra progresso do sistema na sidebar"""
-    st.sidebar.subheader("🔄 Progresso das Etapas")
-
-    # Status das etapas
-    etapas = [
-        ("Hipsométricos", st.session_state.resultados_hipsometricos, "🌳"),
-        ("Volumétricos", st.session_state.resultados_volumetricos, "📊"),
-        ("Inventário", st.session_state.inventario_processado, "📈")
-    ]
-
-    etapas_concluidas = 0
-
-    for nome, resultado, icone in etapas:
-        if resultado:
-            st.sidebar.success(f"✅ {nome}")
-            if isinstance(resultado, dict) and 'melhor_modelo' in resultado:
-                st.sidebar.caption(f"🏆 {resultado['melhor_modelo']}")
-            etapas_concluidas += 1
-        else:
-            st.sidebar.info(f"⏳ {nome}")
-
-    # Barra de progresso
-    if etapas_concluidas > 0:
-        progresso = etapas_concluidas / 3
-        st.sidebar.progress(progresso, text=f"Progresso: {etapas_concluidas}/3")
+    return df_limpo
 
 
-def mostrar_navegacao_principal():
-    """Mostra navegação principal do sistema com status de configuração"""
-    st.header("🌲 Sistema de Inventário Florestal")
-    st.markdown("### Análise Completa em 4 Etapas")
+def mostrar_colunas_disponiveis(df):
+    """Mostra colunas disponíveis no arquivo"""
+    st.info("📋 Colunas disponíveis no arquivo:")
+    colunas_str = ", ".join(df.columns.tolist())
+    st.code(colunas_str)
 
-    # NOVO: Verificar status de configuração
-    config_global = obter_configuracao_global()
-    configurado = config_global.get('configurado', False)
 
-    # NOVO: Etapa 0 - Configurações
-    if not configurado:
-        st.warning("⚠️ **Sistema não configurado** - Configure primeiro antes de executar as análises")
+def mostrar_estatisticas_inventario(df_limpo, df_original):
+    """Mostra estatísticas do inventário processado"""
+    with st.expander("📊 Estatísticas do Inventário"):
+        col1, col2, col3, col4 = st.columns(4)
 
-    col0, col1, col2, col3 = st.columns(4)
+        with col1:
+            st.metric("Registros Originais", len(df_original))
+            st.metric("Registros Válidos", len(df_limpo))
 
-    with col0:
-        st.subheader("⚙️ Etapa 0: Configurações")
-        st.markdown("""
-        **Setup Centralizado**
-        - Filtros globais de dados
-        - Configuração de áreas
-        - Parâmetros florestais
-        - Configurações de modelos
-        """)
+        with col2:
+            st.metric("Talhões", df_limpo['talhao'].nunique())
+            st.metric("Parcelas", df_limpo.groupby(['talhao', 'parcela']).ngroups)
 
-        config_status = "✅ Configurado" if configurado else "⚠️ Pendente"
-        st.info(f"Status: {config_status}")
+        with col3:
+            st.metric("DAP Médio", f"{df_limpo['D_cm'].mean():.1f} cm")
+            st.metric("Altura Média", f"{df_limpo['H_m'].mean():.1f} m")
 
-        if st.button("⚙️ Configurar Sistema", use_container_width=True, key="btn_config_main"):
-            st.switch_page("pages/0_⚙️_Configurações.py")
+        with col4:
+            st.metric("DAP Min-Max", f"{df_limpo['D_cm'].min():.1f}-{df_limpo['D_cm'].max():.1f} cm")
+            st.metric("Altura Min-Max", f"{df_limpo['H_m'].min():.1f}-{df_limpo['H_m'].max():.1f} m")
+
+        # Mostrar preview dos dados
+        st.subheader("👀 Preview dos Dados")
+        st.dataframe(df_limpo.head(10), use_container_width=True)
+
+
+def mostrar_estatisticas_cubagem(df_limpo, df_original):
+    """Mostra estatísticas da cubagem processada"""
+    with st.expander("📊 Estatísticas da Cubagem"):
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            st.metric("Registros Originais", len(df_original))
+            st.metric("Registros Válidos", len(df_limpo))
+
+        with col2:
+            st.metric("Árvores Cubadas", df_limpo['arv'].nunique())
+            st.metric("Talhões", df_limpo['talhao'].nunique())
+
+        with col3:
+            seções_por_arvore = df_limpo.groupby(['talhao', 'arv']).size()
+            st.metric("Seções/Árvore", f"{seções_por_arvore.mean():.1f}")
+            st.metric("DAP Médio", f"{df_limpo['D_cm'].mean():.1f} cm")
+
+        with col4:
+            st.metric("Altura Média", f"{df_limpo['H_m'].mean():.1f} m")
+            st.metric("Diâm. Seção Médio", f"{df_limpo['d_cm'].mean():.1f} cm")
+
+        # Mostrar preview dos dados
+        st.subheader("👀 Preview dos Dados")
+        st.dataframe(df_limpo.head(10), use_container_width=True)
+
+
+def mostrar_preview_dados_carregados():
+    """Mostra preview dos dados já carregados"""
+    if hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
+        st.subheader("📋 Dados de Inventário Carregados")
+
+        df_inv = st.session_state.dados_inventario
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Registros", len(df_inv))
+        with col2:
+            st.metric("Talhões", df_inv['talhao'].nunique())
+        with col3:
+            st.metric("DAP Médio", f"{df_inv['D_cm'].mean():.1f} cm")
+        with col4:
+            st.metric("Altura Média", f"{df_inv['H_m'].mean():.1f} m")
+
+        if st.checkbox("👀 Mostrar Preview do Inventário"):
+            st.dataframe(df_inv.head(), use_container_width=True)
+
+    if hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
+        st.subheader("📏 Dados de Cubagem Carregados")
+
+        df_cub = st.session_state.dados_cubagem
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Registros", len(df_cub))
+        with col2:
+            st.metric("Árvores", df_cub['arv'].nunique())
+        with col3:
+            st.metric("DAP Médio", f"{df_cub['D_cm'].mean():.1f} cm")
+        with col4:
+            seções = df_cub.groupby(['talhao', 'arv']).size().mean()
+            st.metric("Seções/Árvore", f"{seções:.1f}")
+
+        if st.checkbox("👀 Mostrar Preview da Cubagem"):
+            st.dataframe(df_cub.head(), use_container_width=True)
+
+
+def mostrar_status_sistema():
+    """Mostra status geral do sistema"""
+    st.subheader("🔧 Status do Sistema")
+
+    # Verificar configuração
+    config = obter_configuracao_global()
+    configurado = config.get('configurado', False)
+
+    # Verificar dados carregados
+    dados_inventario = hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None
+    dados_cubagem = hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None
+
+    # Verificar etapas executadas
+    hip_executado = hasattr(st.session_state,
+                            'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None
+    vol_executado = hasattr(st.session_state,
+                            'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None
+    inv_executado = hasattr(st.session_state,
+                            'inventario_processado') and st.session_state.inventario_processado is not None
+
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
-        st.subheader("🌳 Etapa 1: Modelos Hipsométricos")
-        st.markdown("""
-        **Análise Altura-Diâmetro**
-        - 7 modelos disponíveis
-        - Lineares e não-lineares
-        - Seleção automática do melhor
-        - Análise de significância
-        """)
-
-        disabled_hip = not configurado
-        if st.button("🚀 Iniciar Hipsométricos", use_container_width=True,
-                     key="btn_hip_main", disabled=disabled_hip):
-            st.switch_page("pages/1_🌳_Modelos_Hipsométricos.py")
-
-        if disabled_hip:
-            st.caption("Configure o sistema primeiro")
+        if dados_inventario and dados_cubagem:
+            st.success("✅ **Dados**\nCarregados")
+        elif dados_inventario or dados_cubagem:
+            st.warning("⚠️ **Dados**\nIncompletos")
+        else:
+            st.error("❌ **Dados**\nFaltantes")
 
     with col2:
-        st.subheader("📊 Etapa 2: Modelos Volumétricos")
-        st.markdown("""
-        **Cubagem e Volume**
-        - Método de Smalian
-        - 4 modelos volumétricos
-        - Coeficientes detalhados
-        - Análise de resíduos
-        """)
-
-        disabled_vol = not configurado
-        if st.button("🚀 Iniciar Volumétricos", use_container_width=True,
-                     key="btn_vol_main", disabled=disabled_vol):
-            st.switch_page("pages/2_📊_Modelos_Volumétricos.py")
-
-        if disabled_vol:
-            st.caption("Configure o sistema primeiro")
+        if configurado:
+            st.success("✅ **Config**\nOK")
+        else:
+            st.error("❌ **Config**\nNecessária")
 
     with col3:
-        st.subheader("📈 Etapa 3: Inventário Final")
-        st.markdown("""
-        **Processamento Completo**
-        - Aplicação dos melhores modelos
-        - Relatórios executivos
-        - Análise por talhão
-        - Downloads organizados
-        """)
+        if hip_executado:
+            st.success("✅ **Etapa 1**\nConcluída")
+        else:
+            st.info("⏳ **Etapa 1**\nPendente")
 
-        disabled_inv = not configurado
-        if st.button("🚀 Processar Inventário", use_container_width=True,
-                     key="btn_inv_main", disabled=disabled_inv):
-            st.switch_page("pages/3_📈_Inventário_Florestal.py")
+    with col4:
+        if vol_executado:
+            st.success("✅ **Etapa 2**\nConcluída")
+        else:
+            st.info("⏳ **Etapa 2**\nPendente")
 
-        if disabled_inv:
-            st.caption("Configure o sistema primeiro")
+    with col5:
+        if inv_executado:
+            st.success("✅ **Etapa 3**\nConcluída")
+        else:
+            st.info("⏳ **Etapa 3**\nPendente")
+
+    # Progresso geral
+    etapas_completas = sum(
+        [dados_inventario and dados_cubagem, configurado, hip_executado, vol_executado, inv_executado])
+    progresso = etapas_completas / 5
+
+    st.progress(progresso, text=f"Progresso Geral: {etapas_completas}/5 itens concluídos")
+
+    # Status dos arquivos opcionais
+    mostrar_status_arquivos_opcionais()
 
 
-def mostrar_instrucoes():
-    """Mostra instruções quando arquivos não estão carregados"""
-    st.header("🌲 Sistema de Inventário Florestal")
-    st.subheader("📋 Como Usar o Sistema")
-
-    st.markdown("""
-    ### 🎯 ** Fluxo de Trabalho Simplificado**
-    1. **📁 Upload**: Carregue inventário e cubagem na barra lateral
-    2. **⚙️ Etapa 0**: Configure uma vez todas as opções do sistema
-    3. **🌳 Etapa 1**: Ajuste modelos hipsométricos (usa config automática)
-    4. **📊 Etapa 2**: Ajuste modelos volumétricos (usa config automática)
-    5. **📈 Etapa 3**: Processe o inventário completo (usa config automática)
-    """)
-
-    # NOVO: Destacar benefícios das configurações centralizadas
-    st.info("""
-    💡 **Vantagens das Configurações Centralizadas:**
-
-    - **Consistência**: Mesmos filtros aplicados em todas as etapas
-    - **Simplicidade**: Configure uma vez, use em todas as etapas
-    - **Transparência**: Sempre saiba quais configurações estão sendo aplicadas
-    - **Rastreabilidade**: Configurações salvas nos relatórios
-    """)
+def mostrar_status_arquivos_opcionais():
+    """Mostra status dos arquivos opcionais"""
+    st.subheader("📁 Arquivos Opcionais")
 
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("📋 Arquivo de Inventário")
-        st.markdown("""
-        **Colunas obrigatórias:**
-        - `D_cm`: Diâmetro (cm)
-        - `H_m`: Altura (m) 
-        - `talhao`: ID do talhão
-        - `parcela`: ID da parcela
-        - `cod`: Código da árvore (D/N/C/I)
-
-        **Opcional:**
-        - `idade_anos`: Idade do povoamento
-        """)
-
-        # Exemplo
-        exemplo_inv = pd.DataFrame({
-            'talhao': [1, 1, 2, 2],
-            'parcela': [1, 1, 1, 2],
-            'D_cm': [15.2, 18.5, 20.1, 16.8],
-            'H_m': [18.5, 22.1, 24.3, 19.8],
-            'cod': ['N', 'D', 'D', 'N']
-        })
-        st.dataframe(exemplo_inv, hide_index=True)
+        # Shapefile
+        if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
+            st.success("✅ **Shapefile**\nCarregado")
+            st.caption(f"📄 {st.session_state.arquivo_shapefile.name}")
+            st.info("🗺️ Método 'Upload shapefile' disponível nas configurações")
+        else:
+            st.warning("⚠️ **Shapefile**\nNão carregado")
+            st.caption("Upload na sidebar para habilitar método avançado de área")
 
     with col2:
-        st.subheader("📏 Arquivo de Cubagem")
-        st.markdown("""
-        **Colunas obrigatórias:**
-        - `arv`: ID da árvore
-        - `talhao`: ID do talhão
-        - `d_cm`: Diâmetro da seção (cm)
-        - `h_m`: Altura da seção (m)
-        - `D_cm`: DAP da árvore (cm)
-        - `H_m`: Altura total (m)
-        """)
-
-        # Exemplo
-        exemplo_cub = pd.DataFrame({
-            'arv': [1, 1, 2, 2],
-            'talhao': [1, 1, 1, 1],
-            'd_cm': [0, 15.2, 0, 18.5],
-            'h_m': [0.1, 2.0, 0.1, 2.0],
-            'D_cm': [15.2, 15.2, 18.5, 18.5],
-            'H_m': [18.5, 18.5, 22.1, 22.1]
-        })
-        st.dataframe(exemplo_cub, hide_index=True)
+        # Coordenadas
+        if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
+            st.success("✅ **Coordenadas**\nCarregadas")
+            st.caption(f"📄 {st.session_state.arquivo_coordenadas.name}")
+            st.info("📍 Método 'Coordenadas das parcelas' disponível nas configurações")
+        else:
+            st.warning("⚠️ **Coordenadas**\nNão carregadas")
+            st.caption("Upload na sidebar para habilitar método avançado de área")
 
 
-def mostrar_alerta_configuracao():
-    """NOVO: Mostra alerta sobre importância da configuração"""
-    config_global = obter_configuracao_global()
+def mostrar_proximos_passos():
+    """Mostra próximos passos recomendados"""
+    st.subheader("🚀 Próximos Passos")
 
-    if not config_global.get('configurado', False):
-        st.warning("""
-        ⚠️ **Sistema Não Configurado**
+    # Verificar estado atual
+    dados_ok = (hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None and
+                hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None)
 
-        Configure o sistema na **Etapa 0** antes de executar as análises. 
-        As configurações definidas lá serão aplicadas automaticamente em todas as etapas.
+    config = obter_configuracao_global()
+    configurado = config.get('configurado', False)
 
-        **Configurações importantes:**
-        - Filtros de dados (talhões a excluir, diâmetro mínimo)
-        - Método de cálculo de áreas
-        - Parâmetros florestais
-        - Configurações de modelos
-        """)
-
-        if st.button("⚙️ Ir para Configurações Agora", type="primary", use_container_width=True):
+    if not dados_ok:
+        st.info("1️⃣ **Carregue os dados** - Upload dos arquivos de inventário e cubagem na sidebar")
+    elif not configurado:
+        st.info("2️⃣ **Configure o sistema** - Defina filtros e parâmetros na Etapa 0")
+        if st.button("⚙️ Ir para Configurações", type="primary"):
             st.switch_page("pages/0_⚙️_Configurações.py")
-
-
-def debug_arquivos_session_state():
-    """NOVA: Função de debug para verificar arquivos no session_state"""
-    with st.expander("🔍 Debug - Arquivos no Session State"):
-        st.write("**Status dos Arquivos Opcionais:**")
-
-        # Verificar shapefile
-        if hasattr(st.session_state, 'arquivo_shapefile'):
-            shapefile = st.session_state.arquivo_shapefile
-            if shapefile is not None:
-                st.success(f"✅ Shapefile: {shapefile.name}")
-                st.write(f"   - Tipo: {type(shapefile)}")
-                st.write(f"   - Tamanho: {shapefile.size} bytes")
-            else:
-                st.info("ℹ️ Shapefile: None")
-        else:
-            st.warning("⚠️ Atributo 'arquivo_shapefile' não existe")
-
-        # Verificar coordenadas
-        if hasattr(st.session_state, 'arquivo_coordenadas'):
-            coordenadas = st.session_state.arquivo_coordenadas
-            if coordenadas is not None:
-                st.success(f"✅ Coordenadas: {coordenadas.name}")
-                st.write(f"   - Tipo: {type(coordenadas)}")
-                st.write(f"   - Tamanho: {coordenadas.size} bytes")
-            else:
-                st.info("ℹ️ Coordenadas: None")
-        else:
-            st.warning("⚠️ Atributo 'arquivo_coordenadas' não existe")
-
-        # Mostrar todos os atributos relacionados a arquivo
-        st.write("**Todos os atributos 'arquivo_*':**")
-        attrs_arquivo = [k for k in st.session_state.keys() if 'arquivo' in k.lower()]
-        for attr in attrs_arquivo:
-            value = getattr(st.session_state, attr, None)
-            if value is not None and hasattr(value, 'name'):
-                st.write(f"✅ {attr}: {value.name}")
-            else:
-                st.write(f"❌ {attr}: {value}")
-
-
-def main_corrigido():
-    # Inicializar sistema
-    inicializar_session_state()
-
-    # Usar sidebar com verificação
-    arquivos = criar_sidebar_melhorada()
-
-    # Usar processamento com persistência
-    arquivos_ok = processar_uploads_com_persistencia(arquivos)
-
-    # Resto do código continua igual...
-    if arquivos_ok:
-        # Mostrar progresso
-        mostrar_progresso_sistema()
-
-        # Preview dos dados na sidebar
-        if st.sidebar.checkbox("👀 Preview Dados", key="checkbox_preview_main"):
-            with st.sidebar.expander("📊 Inventário"):
-                st.dataframe(st.session_state.dados_inventario.head(3))
-            with st.sidebar.expander("📏 Cubagem"):
-                st.dataframe(st.session_state.dados_cubagem.head(3))
-
-        # Alerta sobre configuração
-        mostrar_alerta_configuracao()
-
-        # Navegação principal
-        mostrar_navegacao_principal()
-
-        # Resumo dos dados
-        st.subheader("📊 Resumo dos Dados Carregados")
-        col1, col2, col3, col4 = st.columns(4)
-
-        with col1:
-            st.metric("Registros Inventário", len(st.session_state.dados_inventario))
-        with col2:
-            st.metric("Registros Cubagem", len(st.session_state.dados_cubagem))
-        with col3:
-            st.metric("Talhões", st.session_state.dados_inventario['talhao'].nunique())
-        with col4:
-            st.metric("Parcelas", st.session_state.dados_inventario['parcela'].nunique())
-
-        # Mostrar preview configuração atual
-        mostrar_preview_configuracao_atual()
-
     else:
-        # Instruções de uso
-        mostrar_instrucoes()
+        st.success("✅ **Sistema pronto!** Execute as etapas de análise:")
 
-        # Características do sistema
-        st.subheader("⭐ Características do Sistema")
         col1, col2, col3 = st.columns(3)
 
         with col1:
-            st.markdown("""
-            **🌳 Modelos Hipsométricos:**
-            - Curtis, Campos, Henri
-            - Prodan (com idade)
-            - Chapman, Weibull, Mononuclear
-            """)
+            if st.button("🌳 Etapa 1\nModelos Hipsométricos", use_container_width=True):
+                st.switch_page("pages/1_🌳_Modelos_Hipsométricos.py")
 
         with col2:
-            st.markdown("""
-            **📊 Modelos Volumétricos:**
-            - Schumacher-Hall
-            - G1, G2, G3 (Goulding)
-            - Cubagem por Smalian
-            """)
+            if st.button("📊 Etapa 2\nModelos Volumétricos", use_container_width=True):
+                st.switch_page("pages/2_📊_Modelos_Volumétricos.py")
 
         with col3:
-            st.markdown("""
-            **📈 Funcionalidades:**
-            - Configurações centralizadas
-            - Análise de significância
-            - Gráficos interativos
-            - Relatórios executivos
-            """)
+            if st.button("📈 Etapa 3\nInventário Final", use_container_width=True):
+                st.switch_page("pages/3_📈_Inventário_Florestal.py")
 
 
-def mostrar_preview_configuracao_atual():
-    """NOVO: Mostra preview das configurações atuais"""
-    config_global = obter_configuracao_global()
+def main():
+    """Função principal da aplicação"""
+    # Inicializar configurações globais
+    inicializar_configuracoes_globais()
 
-    if config_global.get('configurado', False) and hasattr(st.session_state, 'dados_inventario'):
-        with st.expander("⚙️ Preview das Configurações Atuais"):
-            col1, col2 = st.columns(2)
+    # Criar cabeçalho
+    criar_cabecalho_greenvista("Página Principal")
 
-            with col1:
-                st.write("**🔍 Filtros Aplicados:**")
-                st.write(f"• Diâmetro mínimo: {config_global.get('diametro_min', 4.0)} cm")
+    # Criar sidebar com uploads
+    arquivos = criar_sidebar_melhorada()
 
-                talhoes_excluir = config_global.get('talhoes_excluir', [])
-                if talhoes_excluir:
-                    st.write(f"• Talhões excluídos: {talhoes_excluir}")
-                else:
-                    st.write("• Talhões excluídos: Nenhum")
+    # Processar arquivos se carregados
+    if arquivos['inventario'] is not None:
+        dados_inventario = processar_dados_inventario(arquivos['inventario'])
+        if dados_inventario is not None:
+            st.session_state.dados_inventario = dados_inventario
 
-                codigos_excluir = config_global.get('codigos_excluir', [])
-                if codigos_excluir:
-                    st.write(f"• Códigos excluídos: {codigos_excluir}")
-                else:
-                    st.write("• Códigos excluídos: Nenhum")
+    if arquivos['cubagem'] is not None:
+        dados_cubagem = processar_dados_cubagem(arquivos['cubagem'])
+        if dados_cubagem is not None:
+            st.session_state.dados_cubagem = dados_cubagem
 
-            with col2:
-                st.write("**📏 Configurações de Área:**")
-                st.write(f"• Método: {config_global.get('metodo_area', 'Simular automaticamente')}")
-                st.write(f"• Área da parcela: {config_global.get('area_parcela', 400)} m²")
+    # Seção principal da página
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📊 Status do Sistema",
+        "👀 Preview dos Dados",
+        "📋 Instruções",
+        "⚠️ Alertas"
+    ])
 
-                st.write("**🧮 Modelos:**")
-                st.write(
-                    f"• Não-lineares: {'Incluídos' if config_global.get('incluir_nao_lineares', True) else 'Excluídos'}")
+    with tab1:
+        mostrar_status_sistema()
+        st.markdown("---")
+        mostrar_proximos_passos()
 
-            # Calcular impacto dos filtros
-            try:
-                from config.configuracoes_globais import aplicar_filtros_configuracao_global
-                df_original = st.session_state.dados_inventario
-                df_filtrado = aplicar_filtros_configuracao_global(df_original)
+    with tab2:
+        mostrar_preview_dados_carregados()
 
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Registros Originais", len(df_original))
-                with col2:
-                    st.metric("Após Filtros", len(df_filtrado))
-                with col3:
-                    percentual = (len(df_filtrado) / len(df_original)) * 100 if len(df_original) > 0 else 0
-                    st.metric("% Mantido", f"{percentual:.1f}%")
+    with tab3:
+        criar_secao_instrucoes()
 
-            except Exception as e:
-                st.info("Calcule o impacto executando as configurações")
+    with tab4:
+        mostrar_alertas_sistema()
+
+    # Navegação rápida
+    st.markdown("---")
+    criar_navegacao_rapida_botoes()
 
 
 if __name__ == "__main__":
-    main_corrigido()
+    main()
