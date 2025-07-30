@@ -1,7 +1,8 @@
-# pages/4_🛩️_Dados_LiDAR.py
+# pages/4_🛩️_Dados_LiDAR.py - VERSÃO INTEGRADA
 """
-Etapa 4: Integração com Dados LiDAR
+Etapa 4: Integração com Dados LiDAR - VERSÃO COMPLETA
 Página para integração e análise de dados LiDAR com inventário florestal
+NOVA FUNCIONALIDADE: Processamento direto de arquivos LAS/LAZ
 """
 
 import streamlit as st
@@ -11,7 +12,7 @@ import matplotlib.pyplot as plt
 import time
 import traceback
 
-# Importar processadores LiDAR
+# Importar processadores LiDAR originais
 from processors.lidar import (
     processar_dados_lidar,
     integrar_dados_lidar_inventario,
@@ -22,6 +23,15 @@ from processors.lidar import (
     calcular_metricas_validacao_lidar,
     exportar_dados_integrados,
     gerar_relatorio_integracao_lidar
+)
+
+# Importar NOVO processador LAS integrado
+from processors.las_processor_integrado import (
+    ProcessadorLASIntegrado,
+    processar_las_com_interface,
+    mostrar_resultados_processamento_las,
+    criar_interface_processamento_las,
+    integrar_com_pagina_lidar
 )
 
 # Importar configurações
@@ -118,30 +128,111 @@ def mostrar_introducao_lidar():
             - ✅ Análise estrutural avançada
 
             **🔗 Fluxo de Trabalho:**
-            1. Processamento LiDAR (script R)
-            2. Upload das métricas aqui
-            3. Integração automática
+            1. Upload arquivo LAS/LAZ OU métricas CSV
+            2. Processamento automático 
+            3. Integração com inventário
             4. Análise comparativa
             """)
 
 
-def mostrar_upload_lidar():
-    """Interface para upload de dados LiDAR"""
-    st.header("📁 Upload dos Dados LiDAR")
+def mostrar_selecao_metodo_lidar():
+    """Interface para seleção do método de processamento LiDAR"""
+    st.header("📁 Dados LiDAR - Escolha o Método")
 
-    # Upload do arquivo
-    arquivo_lidar = st.file_uploader(
-        "📊 Arquivo de Métricas LiDAR",
-        type=['csv', 'xlsx', 'xls'],
-        help=MENSAGENS_AJUDA_LIDAR['upload'],
-        key="upload_lidar_metrics"
-    )
+    # Verificar disponibilidade do processamento LAS
+    processamento_las_disponivel = integrar_com_pagina_lidar()
 
-    return arquivo_lidar
+    # Tabs para diferentes métodos
+    if processamento_las_disponivel:
+        tab1, tab2 = st.tabs([
+            "🛩️ Processar Arquivo LAS/LAZ",
+            "📊 Upload Métricas Processadas"
+        ])
+    else:
+        tab1 = None
+        tab2 = st.container()
+        st.warning("⚠️ Processamento LAS não disponível - use métricas pré-processadas")
+
+    return tab1, tab2, processamento_las_disponivel
 
 
-def processar_e_integrar_lidar(arquivo_lidar):
-    """Processa e integra dados LiDAR"""
+def processar_metodo_las(tab_las):
+    """Processamento direto de arquivos LAS/LAZ"""
+    with tab_las:
+        st.subheader("🛩️ Processamento Direto LAS/LAZ")
+
+        # Interface de processamento
+        criar_interface_processamento_las()
+
+        # Upload do arquivo LAS
+        arquivo_las = st.file_uploader(
+            "📁 Arquivo LAS/LAZ",
+            type=['las', 'laz'],
+            help="Carregue arquivo LAS ou LAZ (máximo 500MB)",
+            key="upload_las_file"
+        )
+
+        if arquivo_las is not None:
+            st.success(f"✅ Arquivo carregado: {arquivo_las.name}")
+
+            # Obter dados do inventário se disponível
+            dados_inventario = getattr(st.session_state, 'dados_inventario', None)
+
+            if dados_inventario is not None:
+                st.info(f"📋 Inventário disponível: {len(dados_inventario)} registros")
+
+                # Verificar se inventário tem coordenadas
+                tem_coordenadas = 'x' in dados_inventario.columns and 'y' in dados_inventario.columns
+
+                if tem_coordenadas:
+                    st.success("📍 Inventário com coordenadas - processamento preciso")
+                else:
+                    st.warning("⚠️ Inventário sem coordenadas - estimativa automática")
+            else:
+                st.warning("⚠️ Sem dados de inventário - criação de grid automático")
+                dados_inventario = None
+
+            # Processar arquivo LAS
+            resultado_las = processar_las_com_interface(arquivo_las, dados_inventario)
+
+            if resultado_las is not None:
+                # Salvar no session_state
+                st.session_state.dados_lidar_las = {
+                    'df_metricas': resultado_las,
+                    'metodo': 'processamento_las',
+                    'arquivo_original': arquivo_las.name,
+                    'timestamp': pd.Timestamp.now()
+                }
+
+                # Mostrar resultados
+                mostrar_resultados_processamento_las(resultado_las)
+
+                return resultado_las
+
+        return None
+
+
+def processar_metodo_metricas(tab_metricas):
+    """Upload de métricas LiDAR pré-processadas"""
+    with tab_metricas:
+        st.subheader("📊 Upload de Métricas LiDAR")
+
+        # Upload do arquivo
+        arquivo_lidar = st.file_uploader(
+            "📊 Arquivo de Métricas LiDAR",
+            type=['csv', 'xlsx', 'xls'],
+            help=MENSAGENS_AJUDA_LIDAR['upload'],
+            key="upload_lidar_metrics"
+        )
+
+        if arquivo_lidar is not None:
+            return processar_e_integrar_lidar_metricas(arquivo_lidar)
+
+        return None
+
+
+def processar_e_integrar_lidar_metricas(arquivo_lidar):
+    """Processa e integra dados LiDAR de métricas pré-processadas"""
     try:
         # Processar dados LiDAR
         with st.spinner("🔄 Processando dados LiDAR..."):
@@ -182,6 +273,7 @@ def processar_e_integrar_lidar(arquivo_lidar):
             'df_integrado': df_integrado,
             'stats_comparacao': stats_comparacao,
             'alertas': alertas,
+            'metodo': 'metricas_processadas',
             'timestamp': pd.Timestamp.now()
         }
 
@@ -646,100 +738,96 @@ def mostrar_downloads_lidar(df_integrado, stats_comparacao, alertas):
 
 def mostrar_resumo_integracao():
     """Mostra resumo da integração LiDAR"""
-    if 'dados_lidar' not in st.session_state:
+    dados_lidar = getattr(st.session_state, 'dados_lidar', None)
+    dados_las = getattr(st.session_state, 'dados_lidar_las', None)
+
+    if dados_lidar is None and dados_las is None:
         return
 
-    dados = st.session_state.dados_lidar
-    df_integrado = dados['df_integrado']
-    stats_comparacao = dados['stats_comparacao']
+    st.header("📋 Resumo da Integração LiDAR")
 
-    st.header("📋 Resumo da Integração")
+    # Determinar fonte dos dados
+    if dados_las is not None:
+        # Dados de processamento LAS
+        df_metricas = dados_las['df_metricas']
+        metodo = "Processamento LAS/LAZ"
 
-    col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4 = st.columns(4)
 
-    with col1:
-        total_parcelas = len(df_integrado)
-        st.metric("📊 Total Parcelas", total_parcelas)
+        with col1:
+            st.metric("📊 Total Parcelas", len(df_metricas))
+        with col2:
+            pontos_total = df_metricas['n_pontos'].sum()
+            st.metric("🛩️ Total Pontos", f"{pontos_total:,}")
+        with col3:
+            altura_media = df_metricas['altura_media'].mean()
+            st.metric("🌳 Altura Média", f"{altura_media:.1f} m")
+        with col4:
+            cobertura_media = df_metricas['cobertura'].mean()
+            st.metric("🍃 Cobertura", f"{cobertura_media:.1f}%")
 
-    with col2:
-        parcelas_lidar = df_integrado['altura_media'].notna().sum() if 'altura_media' in df_integrado.columns else 0
-        cobertura = (parcelas_lidar / total_parcelas) * 100 if total_parcelas > 0 else 0
-        st.metric("🛩️ Cobertura LiDAR", f"{cobertura:.1f}%")
+        st.info(f"📁 **Método:** {metodo} - {dados_las['arquivo_original']}")
 
-    with col3:
-        if stats_comparacao:
-            correlacao = stats_comparacao['correlacao']
-            st.metric("🔗 Correlação", f"{correlacao:.3f}")
-        else:
-            st.metric("🔗 Correlação", "N/A")
+    elif dados_lidar is not None:
+        # Dados de métricas processadas
+        dados = dados_lidar
+        df_integrado = dados['df_integrado']
+        stats_comparacao = dados['stats_comparacao']
 
-    with col4:
-        n_alertas = len(dados['alertas'])
-        st.metric("⚠️ Alertas", n_alertas)
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            total_parcelas = len(df_integrado)
+            st.metric("📊 Total Parcelas", total_parcelas)
+
+        with col2:
+            parcelas_lidar = df_integrado['altura_media'].notna().sum() if 'altura_media' in df_integrado.columns else 0
+            cobertura = (parcelas_lidar / total_parcelas) * 100 if total_parcelas > 0 else 0
+            st.metric("🛩️ Cobertura LiDAR", f"{cobertura:.1f}%")
+
+        with col3:
+            if stats_comparacao:
+                correlacao = stats_comparacao['correlacao']
+                st.metric("🔗 Correlação", f"{correlacao:.3f}")
+            else:
+                st.metric("🔗 Correlação", "N/A")
+
+        with col4:
+            n_alertas = len(dados['alertas'])
+            st.metric("⚠️ Alertas", n_alertas)
+
+        st.info(f"📁 **Método:** Métricas pré-processadas")
 
 
-def main():
-    """Função principal da página LiDAR"""
-    # Verificar pré-requisitos
-    if not verificar_prerequisitos():
-        return
+def mostrar_dados_salvos_lidar():
+    """Mostra dados LiDAR salvos e permite reprocessamento"""
+    dados_lidar = getattr(st.session_state, 'dados_lidar', None)
+    dados_las = getattr(st.session_state, 'dados_lidar_las', None)
 
-    # Mostrar status da configuração na sidebar
-    mostrar_status_configuracao_sidebar()
+    if dados_lidar is None and dados_las is None:
+        return False
 
-    # Introdução
-    mostrar_introducao_lidar()
+    st.markdown("---")
+    st.subheader("📂 Dados LiDAR Salvos")
 
-    # Upload de dados LiDAR
-    arquivo_lidar = mostrar_upload_lidar()
+    # Mostrar informações dos dados salvos
+    if dados_las is not None:
+        st.info(f"🛩️ **Processamento LAS:** {dados_las['arquivo_original']}")
+        timestamp = dados_las['timestamp'].strftime('%d/%m/%Y %H:%M:%S')
+        st.caption(f"📅 Processado em: {timestamp}")
 
-    # Se há dados LiDAR já processados, mostrar resumo
-    if 'dados_lidar' in st.session_state:
-        mostrar_resumo_integracao()
+        if st.checkbox("👀 Mostrar Dados LAS Processados", key="mostrar_las_salvo"):
+            mostrar_resultados_processamento_las(dados_las['df_metricas'])
 
-    # Processar dados se arquivo foi carregado
-    if arquivo_lidar is not None:
-        st.markdown("---")
+    if dados_lidar is not None:
+        st.info(f"📊 **Métricas Processadas:** Análise completa disponível")
+        timestamp = dados_lidar['timestamp'].strftime('%d/%m/%Y %H:%M:%S')
+        st.caption(f"📅 Processado em: {timestamp}")
 
-        df_integrado, stats_comparacao, alertas = processar_e_integrar_lidar(arquivo_lidar)
-
-        if df_integrado is not None:
-            # Criar abas para diferentes análises
-            tab1, tab2, tab3, tab4, tab5 = st.tabs([
-                "📊 Comparação",
-                "🌲 Estrutural",
-                "🔧 Calibração",
-                "⚠️ Alertas",
-                "💾 Downloads"
-            ])
-
-            with tab1:
-                mostrar_resultados_comparacao(stats_comparacao)
-
-            with tab2:
-                mostrar_analise_estrutural(df_integrado)
-
-            with tab3:
-                mostrar_calibracao_modelos(df_integrado)
-
-            with tab4:
-                mostrar_alertas_lidar(alertas)
-
-            with tab5:
-                mostrar_downloads_lidar(df_integrado, stats_comparacao, alertas)
-
-    # Se há dados salvos, mostrar resultados
-    elif 'dados_lidar' in st.session_state:
-        st.markdown("---")
-        st.subheader("📂 Dados LiDAR Salvos")
-
-        dados_salvos = st.session_state.dados_lidar
-
-        # Checkbox para mostrar dados salvos
-        if st.checkbox("👀 Mostrar Análise Salva", key="mostrar_lidar_salvo"):
-            df_integrado = dados_salvos['df_integrado']
-            stats_comparacao = dados_salvos['stats_comparacao']
-            alertas = dados_salvos['alertas']
+        if st.checkbox("👀 Mostrar Análise Completa", key="mostrar_lidar_salvo"):
+            df_integrado = dados_lidar['df_integrado']
+            stats_comparacao = dados_lidar['stats_comparacao']
+            alertas = dados_lidar['alertas']
 
             # Recriar abas com dados salvos
             tab1, tab2, tab3, tab4, tab5 = st.tabs([
@@ -764,6 +852,110 @@ def main():
 
             with tab5:
                 mostrar_downloads_lidar(df_integrado, stats_comparacao, alertas)
+
+    return True
+
+
+def limpar_dados_lidar():
+    """Limpa dados LiDAR salvos"""
+    keys_para_limpar = ['dados_lidar', 'dados_lidar_las', 'calibracao_lidar']
+
+    for key in keys_para_limpar:
+        if hasattr(st.session_state, key):
+            delattr(st.session_state, key)
+
+    st.success("🗑️ Dados LiDAR limpos!")
+    st.rerun()
+
+
+def main():
+    """Função principal da página LiDAR integrada"""
+    # Verificar pré-requisitos
+    if not verificar_prerequisitos():
+        return
+
+    # Mostrar status da configuração na sidebar
+    mostrar_status_configuracao_sidebar()
+
+    # Introdução
+    mostrar_introducao_lidar()
+
+    # Mostrar resumo se há dados salvos
+    mostrar_resumo_integracao()
+
+    # Seleção do método de processamento
+    tab_las, tab_metricas, processamento_las_disponivel = mostrar_selecao_metodo_lidar()
+
+    # Variáveis para controlar fluxo
+    resultado_las = None
+    resultado_metricas = None
+
+    # Processamento LAS (se disponível)
+    if processamento_las_disponivel and tab_las is not None:
+        resultado_las = processar_metodo_las(tab_las)
+
+    # Processamento de métricas
+    if tab_metricas is not None:
+        resultado_metricas = processar_metodo_metricas(tab_metricas)
+
+    # Se há dados processados em métricas, mostrar análise completa
+    if resultado_metricas is not None:
+        df_integrado, stats_comparacao, alertas = resultado_metricas
+
+        if df_integrado is not None:
+            st.markdown("---")
+            st.subheader("📊 Análise Completa LiDAR")
+
+            # Criar abas para diferentes análises
+            tab1, tab2, tab3, tab4, tab5 = st.tabs([
+                "📊 Comparação",
+                "🌲 Estrutural",
+                "🔧 Calibração",
+                "⚠️ Alertas",
+                "💾 Downloads"
+            ])
+
+            with tab1:
+                mostrar_resultados_comparacao(stats_comparacao)
+
+            with tab2:
+                mostrar_analise_estrutural(df_integrado)
+
+            with tab3:
+                mostrar_calibracao_modelos(df_integrado)
+
+            with tab4:
+                mostrar_alertas_lidar(alertas)
+
+            with tab5:
+                mostrar_downloads_lidar(df_integrado, stats_comparacao, alertas)
+
+    # Mostrar dados salvos se existirem e não há processamento ativo
+    elif not mostrar_dados_salvos_lidar():
+        # Nenhum dado disponível - mostrar instruções
+        st.markdown("---")
+        st.info("📋 **Próximos Passos:**")
+
+        if processamento_las_disponivel:
+            st.markdown("""
+            1. **🛩️ Processamento LAS/LAZ:** Carregue arquivo LAS/LAZ para processamento direto
+            2. **📊 Métricas Processadas:** Upload de arquivo CSV/Excel com métricas já calculadas
+
+            **💡 Recomendação:** Use processamento LAS/LAZ para máxima precisão e controle
+            """)
+        else:
+            st.markdown("""
+            1. **📦 Instalar Dependências:** Execute `pip install laspy[lazrs,laszip] geopandas` para habilitar processamento LAS
+            2. **📊 Métricas Processadas:** Use arquivo CSV/Excel com métricas já calculadas
+
+            **💡 Alternativa:** Processe arquivos LAS no R e faça upload das métricas
+            """)
+
+    # Botão para limpar dados
+    if hasattr(st.session_state, 'dados_lidar') or hasattr(st.session_state, 'dados_lidar_las'):
+        st.markdown("---")
+        if st.button("🗑️ Limpar Dados LiDAR", type="secondary", help="Remove todos os dados LiDAR salvos"):
+            limpar_dados_lidar()
 
 
 if __name__ == "__main__":

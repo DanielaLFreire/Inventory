@@ -4,15 +4,17 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="0933ff58-d44a-4d20-9ba5-872577b7c28e" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/app1.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pages/1__Modelos_Hipsométricos.py" afterPathEscaped="$PROJECT_DIR$/pages/1_🌳_Modelos_Hipsométricos.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pages/2__Modelos_Volumétricos.py" afterPathEscaped="$PROJECT_DIR$/pages/2_📊_Modelos_Volumétricos.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/pages/3__Inventário_Florestal.py" afterPathEscaped="$PROJECT_DIR$/pages/3_📈_Inventário_Florestal.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/principal.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/ui/sidebarold.py" afterDir="false" />
+    <list default="true" id="0933ff58-d44a-4d20-9ba5-872577b7c28e" name="Changes" comment="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <change afterPath="$PROJECT_DIR$/.streamlit/config.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/config/config_las.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/processors/las_processor_integrado.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Principal.py" beforeDir="false" afterPath="$PROJECT_DIR$/Principal.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/pages/4_️_Dados_LiDAR.py" beforePathEscaped="$PROJECT_DIR$/pages/4_🛩️_Dados_LiDAR.py" beforeDir="false" afterPath="$PROJECT_DIR$/pages/4_️_Dados_LiDAR.py" afterPathEscaped="$PROJECT_DIR$/pages/4_🛩️_Dados_LiDAR.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/ui/sidebar.py" beforeDir="false" afterPath="$PROJECT_DIR$/ui/sidebar.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/arquivo_handler.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/arquivo_handler.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -34,8 +36,14 @@
     </option>
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
   </component>
-  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
-  "lastFilter": {}
+  <component name="GitHubPullRequestSearchHistory">{
+  &quot;lastFilter&quot;: {}
+}</component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/DanielaLFreire/Inventory",
+    "accountId": "dbd158ed-d467-4aa8-b622-9100983eff4b"
+  }
 }]]></component>
   <component name="ProjectColorInfo">{
   &quot;associatedIndex&quot;: 3
@@ -52,14 +60,30 @@
   "keyToString": {
     "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
     "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "Python.0_⚙️_Configurações.executor": "Run",
     "Python.1_🌳_Modelos_Hipsométricos.executor": "Run",
     "Python.2_📊_Modelos_Volumétricos.executor": "Run",
     "Python.3_📈_Inventário_Florestal.executor": "Run",
+    "Python.4_🛩️_Dados_LiDAR.executor": "Run",
+    "Python.Principal.executor": "Run",
+    "Python.__init__.executor": "Run",
     "Python._pydev_execfile.executor": "Run",
     "Python.app.executor": "Debug",
+    "Python.arquivo_handler.executor": "Run",
+    "Python.base.executor": "Run",
+    "Python.components.executor": "Run",
+    "Python.config.executor": "Run",
+    "Python.config_las.executor": "Run",
+    "Python.configuracoes_globais.executor": "Run",
+    "Python.formatacao.executor": "Run",
+    "Python.graficos.executor": "Run",
+    "Python.hipsometrico.executor": "Run",
+    "Python.las_processor_integrado.executor": "Run",
+    "Python.lidar.executor": "Run",
     "Python.principal.executor": "Run",
     "Python.principal1.executor": "Run",
     "Python.sidebar.executor": "Run",
+    "Python.utils_gerais.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
@@ -96,11 +120,172 @@
       <option name="project" value="LOCAL" />
       <updated>1753329678985</updated>
     </task>
-    <option name="localTasksCounter" value="2" />
+    <task id="LOCAL-00002" summary="Melhoria">
+      <option name="closed" value="true" />
+      <created>1753364509143</created>
+      <option name="number" value="00002" />
+      <option name="presentableId" value="LOCAL-00002" />
+      <option name="project" value="LOCAL" />
+      <updated>1753364509143</updated>
+    </task>
+    <task id="LOCAL-00003" summary="Melhoria">
+      <option name="closed" value="true" />
+      <created>1753364809877</created>
+      <option name="number" value="00003" />
+      <option name="presentableId" value="LOCAL-00003" />
+      <option name="project" value="LOCAL" />
+      <updated>1753364809877</updated>
+    </task>
+    <task id="LOCAL-00004" summary="Melhoria">
+      <option name="closed" value="true" />
+      <created>1753379330622</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1753379330622</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Melhoria">
+      <option name="closed" value="true" />
+      <created>1753381549707</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1753381549707</updated>
+    </task>
+    <task id="LOCAL-00006" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753382094697</created>
+      <option name="number" value="00006" />
+      <option name="presentableId" value="LOCAL-00006" />
+      <option name="project" value="LOCAL" />
+      <updated>1753382094697</updated>
+    </task>
+    <task id="LOCAL-00007" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753382945038</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1753382945038</updated>
+    </task>
+    <task id="LOCAL-00008" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753386160314</created>
+      <option name="number" value="00008" />
+      <option name="presentableId" value="LOCAL-00008" />
+      <option name="project" value="LOCAL" />
+      <updated>1753386160314</updated>
+    </task>
+    <task id="LOCAL-00009" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753387544857</created>
+      <option name="number" value="00009" />
+      <option name="presentableId" value="LOCAL-00009" />
+      <option name="project" value="LOCAL" />
+      <updated>1753387544857</updated>
+    </task>
+    <task id="LOCAL-00010" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753387697143</created>
+      <option name="number" value="00010" />
+      <option name="presentableId" value="LOCAL-00010" />
+      <option name="project" value="LOCAL" />
+      <updated>1753387697143</updated>
+    </task>
+    <task id="LOCAL-00011" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753444954463</created>
+      <option name="number" value="00011" />
+      <option name="presentableId" value="LOCAL-00011" />
+      <option name="project" value="LOCAL" />
+      <updated>1753444954464</updated>
+    </task>
+    <task id="LOCAL-00012" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753461796642</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1753461796642</updated>
+    </task>
+    <task id="LOCAL-00013" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753463232592</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1753463232592</updated>
+    </task>
+    <task id="LOCAL-00014" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753465465330</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1753465465330</updated>
+    </task>
+    <task id="LOCAL-00015" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753466100168</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1753466100168</updated>
+    </task>
+    <task id="LOCAL-00016" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753468263779</created>
+      <option name="number" value="00016" />
+      <option name="presentableId" value="LOCAL-00016" />
+      <option name="project" value="LOCAL" />
+      <updated>1753468263779</updated>
+    </task>
+    <task id="LOCAL-00017" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753469717252</created>
+      <option name="number" value="00017" />
+      <option name="presentableId" value="LOCAL-00017" />
+      <option name="project" value="LOCAL" />
+      <updated>1753469717252</updated>
+    </task>
+    <task id="LOCAL-00018" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753474494782</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1753474494783</updated>
+    </task>
+    <task id="LOCAL-00019" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753476534911</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1753476534911</updated>
+    </task>
+    <task id="LOCAL-00020" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753749109189</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1753749109189</updated>
+    </task>
+    <task id="LOCAL-00021" summary="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA">
+      <option name="closed" value="true" />
+      <created>1753749126832</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1753749126832</updated>
+    </task>
+    <option name="localTasksCounter" value="22" />
     <servers />
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Melhoria" />
-    <option name="LAST_COMMIT_MESSAGE" value="Melhoria" />
+    <MESSAGE value="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA" />
+    <option name="LAST_COMMIT_MESSAGE" value="VERSÃO MELHORADA COM FORMATAÇÃO BRASILEIRA" />
   </component>
 </project>

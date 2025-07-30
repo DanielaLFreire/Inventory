@@ -27,7 +27,7 @@ from utils.arquivo_handler import (
     exportar_dataframe,
     criar_template_csv,
     verificar_qualidade_dados,
-    normalizar_nomes_colunas,
+    #normalizar_nomes_colunas,
     detectar_separador_csv,
     detectar_encoding_arquivo
 )
