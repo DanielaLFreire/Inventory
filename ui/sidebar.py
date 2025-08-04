@@ -39,20 +39,13 @@ def verificar_disponibilidade_las():
 
 def processar_dados_inventario_sidebar(arquivo_inventario):
     """
-    Processa dados do inventário na sidebar com feedback completo
-    VERSÃO CORRIGIDA: Usa função segura de carregamento
-
-    Args:
-        arquivo_inventario: Arquivo de inventário carregado OU DataFrame
-
-    Returns:
-        DataFrame processado ou None se erro
+    Processa dados do inventário com persistência garantida - VERSÃO CORRIGIDA
     """
     try:
         if arquivo_inventario is None:
             return None
 
-        # CORREÇÃO: Usar função segura que trata DataFrames
+        # Usar função segura de carregamento
         df_inventario = carregar_arquivo_seguro(arquivo_inventario, "inventário")
 
         if df_inventario is None:
@@ -65,7 +58,7 @@ def processar_dados_inventario_sidebar(arquivo_inventario):
 
         if not validacao['valido']:
             st.sidebar.error("❌ Estrutura inválida")
-            for erro in validacao['erros'][:2]:  # Mostrar apenas 2 primeiros erros na sidebar
+            for erro in validacao['erros'][:2]:
                 st.sidebar.error(f"• {erro}")
             return None
 
@@ -76,16 +69,44 @@ def processar_dados_inventario_sidebar(arquivo_inventario):
             st.sidebar.error("❌ Sem dados válidos")
             return None
 
-        # Feedback de sucesso
-        percentual_mantido = (len(df_limpo) / len(df_inventario)) * 100
-        st.sidebar.success(f"✅ Inventário OK")
-        st.sidebar.info(f"📊 {len(df_limpo):,} registros ({percentual_mantido:.1f}%)")
+        # CORREÇÃO PRINCIPAL: Salvar de forma mais robusta
+        try:
+            # 1. Fazer cópia profunda
+            df_para_salvar = df_limpo.copy(deep=True)
 
-        return df_limpo
+            # 2. Limpar dados anteriores
+            if hasattr(st.session_state, 'dados_inventario'):
+                del st.session_state.dados_inventario
+
+            # 3. Salvar dados principais
+            st.session_state.dados_inventario = df_para_salvar
+
+            # 4. Salvar flags de controle
+            st.session_state.arquivos_carregados = True
+            st.session_state.timestamp_carregamento_inventario = pd.Timestamp.now()
+
+            # 5. VERIFICAR SE SALVAMENTO FOI BEM-SUCEDIDO
+            if (hasattr(st.session_state, 'dados_inventario') and
+                    st.session_state.dados_inventario is not None and
+                    len(st.session_state.dados_inventario) == len(df_limpo)):
+
+                # Feedback de sucesso
+                percentual_mantido = (len(df_limpo) / len(df_inventario)) * 100
+                st.sidebar.success(f"✅ Inventário Persistido!")
+                st.sidebar.info(f"📊 {len(df_limpo):,} registros ({percentual_mantido:.1f}%)")
+                st.sidebar.info(f"🌳 {df_limpo['talhao'].nunique()} talhões")
+
+                return df_limpo
+            else:
+                st.sidebar.error("❌ Erro: Dados não persistiram")
+                return None
+
+        except Exception as e:
+            st.sidebar.error(f"❌ Erro ao persistir: {str(e)[:30]}...")
+            return None
 
     except Exception as e:
         st.sidebar.error(f"❌ Erro: {str(e)[:50]}...")
-        # Debug detalhado apenas se necessário
         if st.sidebar.button("🔍 Debug", key="debug_inventario"):
             st.sidebar.code(str(e))
         return None
@@ -93,20 +114,13 @@ def processar_dados_inventario_sidebar(arquivo_inventario):
 
 def processar_dados_cubagem_sidebar(arquivo_cubagem):
     """
-    Processa dados de cubagem na sidebar com feedback completo
-    VERSÃO CORRIGIDA: Usa função segura de carregamento
-
-    Args:
-        arquivo_cubagem: Arquivo de cubagem carregado OU DataFrame
-
-    Returns:
-        DataFrame processado ou None se erro
+    Processa dados de cubagem com persistência garantida - VERSÃO CORRIGIDA
     """
     try:
         if arquivo_cubagem is None:
             return None
 
-        # CORREÇÃO: Usar função segura que trata DataFrames
+        # Usar função segura de carregamento
         df_cubagem = carregar_arquivo_seguro(arquivo_cubagem, "cubagem")
 
         if df_cubagem is None:
@@ -130,16 +144,44 @@ def processar_dados_cubagem_sidebar(arquivo_cubagem):
             st.sidebar.error("❌ Sem dados válidos")
             return None
 
-        # Feedback de sucesso
-        arvores_cubadas = df_limpo['arv'].nunique()
-        st.sidebar.success(f"✅ Cubagem OK")
-        st.sidebar.info(f"📏 {arvores_cubadas} árvores cubadas")
+        # CORREÇÃO: Salvar de forma mais robusta
+        try:
+            # 1. Fazer cópia profunda
+            df_para_salvar = df_limpo.copy(deep=True)
 
-        return df_limpo
+            # 2. Limpar dados anteriores
+            if hasattr(st.session_state, 'dados_cubagem'):
+                del st.session_state.dados_cubagem
+
+            # 3. Salvar dados principais
+            st.session_state.dados_cubagem = df_para_salvar
+
+            # 4. Salvar flags de controle
+            st.session_state.cubagem_carregada = True
+            st.session_state.timestamp_carregamento_cubagem = pd.Timestamp.now()
+
+            # 5. VERIFICAR SALVAMENTO
+            if (hasattr(st.session_state, 'dados_cubagem') and
+                    st.session_state.dados_cubagem is not None and
+                    len(st.session_state.dados_cubagem) == len(df_limpo)):
+
+                # Feedback de sucesso
+                arvores_cubadas = df_limpo['arv'].nunique()
+                st.sidebar.success(f"✅ Cubagem Persistida!")
+                st.sidebar.info(f"📏 {arvores_cubadas} árvores cubadas")
+                st.sidebar.info(f"📊 {len(df_limpo):,} seções")
+
+                return df_limpo
+            else:
+                st.sidebar.error("❌ Erro: Cubagem não persistiu")
+                return None
+
+        except Exception as e:
+            st.sidebar.error(f"❌ Erro ao persistir cubagem: {str(e)[:30]}...")
+            return None
 
     except Exception as e:
         st.sidebar.error(f"❌ Erro: {str(e)[:50]}...")
-        # Debug detalhado apenas se necessário
         if st.sidebar.button("🔍 Debug", key="debug_cubagem"):
             st.sidebar.code(str(e))
         return None
@@ -294,6 +336,8 @@ def criar_sidebar():
     '''
     st.sidebar.header("📁 Upload de Dados")
 
+    mostrar_debug_persistencia_sidebar()
+
     # Upload do arquivo de inventário
     arquivo_inventario = st.sidebar.file_uploader(
         "📋 Arquivo de Inventário",
@@ -432,19 +476,18 @@ pip install scipy
     if arquivo_inventario is not None:
         with st.sidebar.expander("🔄 Processando Inventário..."):
             dados_processados['inventario'] = processar_dados_inventario_sidebar(arquivo_inventario)
+            # REMOVER esta linha - o salvamento já é feito dentro da função
+            # if dados_processados['inventario'] is not None:
+            #     st.session_state.dados_inventario = dados_processados['inventario']
 
-            # Salvar no session_state se processado com sucesso
-            if dados_processados['inventario'] is not None:
-                st.session_state.dados_inventario = dados_processados['inventario']
 
     # Processar cubagem se carregada
     if arquivo_cubagem is not None:
         with st.sidebar.expander("🔄 Processando Cubagem..."):
             dados_processados['cubagem'] = processar_dados_cubagem_sidebar(arquivo_cubagem)
-
-            # Salvar no session_state se processado com sucesso
-            if dados_processados['cubagem'] is not None:
-                st.session_state.dados_cubagem = dados_processados['cubagem']
+            # REMOVER esta linha - o salvamento já é feito dentro da função
+            # if dados_processados['cubagem'] is not None:
+            #     st.session_state.dados_cubagem = dados_processados['cubagem']
 
     # Mostrar status dos arquivos
     mostrar_status_arquivos_completo(dados_processados)
@@ -457,6 +500,28 @@ pip install scipy
 
     # Mostrar informações adicionais e ações rápidas
     mostrar_informacoes_e_acoes_sidebar()
+
+    # VERIFICAÇÃO FINAL DE PERSISTÊNCIA
+    if dados_processados['inventario'] is not None or dados_processados['cubagem'] is not None:
+        # Verificar se realmente foram salvos no session_state
+        inventario_ok = (hasattr(st.session_state, 'dados_inventario') and
+                         st.session_state.dados_inventario is not None and
+                         len(st.session_state.dados_inventario) > 0)
+
+        cubagem_ok = (hasattr(st.session_state, 'dados_cubagem') and
+                      st.session_state.dados_cubagem is not None and
+                      len(st.session_state.dados_cubagem) > 0)
+
+        if inventario_ok and cubagem_ok:
+            st.sidebar.success("🎉 Dados Totalmente Persistidos!")
+            st.sidebar.info("✅ Pode navegar livremente")
+        elif inventario_ok:
+            st.sidebar.info("✅ Inventário persistiu - falta cubagem")
+        elif cubagem_ok:
+            st.sidebar.info("✅ Cubagem persistiu - falta inventário")
+        else:
+            st.sidebar.warning("⚠️ Problemas na persistência detectados")
+            st.sidebar.caption("Use debug para investigar")
 
     return dados_processados
 
@@ -487,14 +552,43 @@ def mostrar_status_arquivos_completo(arquivos):
         except Exception:
             st.sidebar.caption("Estatísticas indisponíveis")
 
+
     elif hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
-        st.sidebar.info("✅ Inventário carregado")
+
+        st.sidebar.success("✅ Inventário persistido")
+
         try:
+
             df_inv = st.session_state.dados_inventario
-            if isinstance(df_inv, pd.DataFrame):
+
+            if isinstance(df_inv, pd.DataFrame) and len(df_inv) > 0:
+
                 st.sidebar.caption(f"📊 {len(df_inv):,} registros")
-        except Exception:
-            st.sidebar.caption("Dados disponíveis")
+
+                st.sidebar.caption(f"🌳 {df_inv['talhao'].nunique()} talhões")
+
+                # Mostrar timestamp se disponível
+
+                if hasattr(st.session_state, 'timestamp_carregamento_inventario'):
+
+                    timestamp = st.session_state.timestamp_carregamento_inventario
+
+                    tempo_decorrido = pd.Timestamp.now() - timestamp
+
+                    if tempo_decorrido.total_seconds() < 3600:  # Menos de 1 hora
+
+                        minutos = int(tempo_decorrido.total_seconds() / 60)
+
+                        st.sidebar.caption(f"⏰ Há {minutos} min")
+
+            else:
+
+                st.sidebar.warning("⚠️ Inventário existe mas inválido")
+
+        except Exception as e:
+
+            st.sidebar.error(f"❌ Erro no inventário: {str(e)[:20]}...")
+
     else:
         st.sidebar.error("❌ Inventário necessário")
 
@@ -512,15 +606,43 @@ def mostrar_status_arquivos_completo(arquivos):
         except Exception:
             st.sidebar.info(f"📏 Dados processados")
 
+
     elif hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
-        st.sidebar.info("✅ Cubagem carregada")
+
+        st.sidebar.success("✅ Cubagem persistida")
+
         try:
+
             df_cub = st.session_state.dados_cubagem
-            if isinstance(df_cub, pd.DataFrame):
+
+            if isinstance(df_cub, pd.DataFrame) and len(df_cub) > 0:
+
                 arvores = df_cub['arv'].nunique()
+
                 st.sidebar.caption(f"📏 {arvores} árvores")
-        except Exception:
-            st.sidebar.caption("Dados disponíveis")
+
+                st.sidebar.caption(f"📊 {len(df_cub):,} seções")
+
+                # Mostrar timestamp se disponível
+
+                if hasattr(st.session_state, 'timestamp_carregamento_cubagem'):
+
+                    timestamp = st.session_state.timestamp_carregamento_cubagem
+
+                    tempo_decorrido = pd.Timestamp.now() - timestamp
+
+                    if tempo_decorrido.total_seconds() < 3600:
+                        minutos = int(tempo_decorrido.total_seconds() / 60)
+
+                        st.sidebar.caption(f"⏰ Há {minutos} min")
+
+            else:
+
+                st.sidebar.warning("⚠️ Cubagem existe mas inválida")
+
+        except Exception as e:
+
+            st.sidebar.error(f"❌ Erro na cubagem: {str(e)[:20]}...")
     else:
         st.sidebar.error("❌ Cubagem necessária")
 
@@ -1194,3 +1316,116 @@ def obter_status_sistema_completo():
             'progresso_total': 0,
             'progresso_completo': 0
         }
+
+
+def mostrar_debug_persistencia_sidebar():
+    """
+    NOVA FUNÇÃO: Debug da persistência dos dados na sidebar
+    """
+    if st.sidebar.checkbox("🔍 Debug Persistência", key="debug_persistencia"):
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("🔧 Status Persistência")
+
+        # Verificar dados de inventário
+        if hasattr(st.session_state, 'dados_inventario'):
+            dados = st.session_state.dados_inventario
+            if dados is not None and len(dados) > 0:
+                st.sidebar.success(f"✅ Inventário: {len(dados)} reg")
+                st.sidebar.caption(f"Talhões: {dados['talhao'].nunique()}")
+            else:
+                st.sidebar.error("❌ Inventário vazio")
+        else:
+            st.sidebar.error("❌ Inventário: não existe")
+
+        # Verificar dados de cubagem
+        if hasattr(st.session_state, 'dados_cubagem'):
+            dados = st.session_state.dados_cubagem
+            if dados is not None and len(dados) > 0:
+                st.sidebar.success(f"✅ Cubagem: {dados['arv'].nunique()} árv")
+                st.sidebar.caption(f"Seções: {len(dados)}")
+            else:
+                st.sidebar.error("❌ Cubagem vazia")
+        else:
+            st.sidebar.error("❌ Cubagem: não existe")
+
+        # Verificar flags
+        if hasattr(st.session_state, 'arquivos_carregados'):
+            if st.session_state.arquivos_carregados:
+                st.sidebar.success("✅ Flag ativa")
+            else:
+                st.sidebar.warning("⚠️ Flag False")
+        else:
+            st.sidebar.error("❌ Flag não existe")
+
+        # Timestamps
+        if hasattr(st.session_state, 'timestamp_carregamento_inventario'):
+            timestamp = st.session_state.timestamp_carregamento_inventario
+            tempo_decorrido = pd.Timestamp.now() - timestamp
+            minutos = int(tempo_decorrido.total_seconds() / 60)
+            st.sidebar.caption(f"⏰ Inventário: há {minutos}min")
+
+        # Botão para limpar e recarregar
+        if st.sidebar.button("🔄 Forçar Recarregamento"):
+            # Limpar session_state
+            keys_para_limpar = ['dados_inventario', 'dados_cubagem', 'arquivos_carregados']
+            for key in keys_para_limpar:
+                if hasattr(st.session_state, key):
+                    delattr(st.session_state, key)
+            st.sidebar.success("🗑️ Session state limpo - recarregue arquivos")
+            st.rerun()
+
+
+def teste_persistencia_sidebar():
+    """
+    FUNÇÃO TEMPORÁRIA - Adicione no final do sidebar.py para testar
+    """
+    if st.sidebar.button("🧪 Teste Rápido Persistência"):
+        st.sidebar.write("**Teste de Persistência:**")
+
+        # Testar inventário
+        if hasattr(st.session_state, 'dados_inventario'):
+            dados = st.session_state.dados_inventario
+            if dados is not None and len(dados) > 0:
+                st.sidebar.success(f"✅ Inventário: {len(dados)} registros")
+
+                # Testar acesso às colunas
+                try:
+                    talhoes = dados['talhao'].nunique()
+                    dap_medio = dados['D_cm'].mean()
+                    st.sidebar.success(f"✅ Acesso OK: {talhoes} talhões, DAP {dap_medio:.1f}")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Erro acesso: {e}")
+            else:
+                st.sidebar.error("❌ Inventário existe mas está vazio/inválido")
+        else:
+            st.sidebar.error("❌ dados_inventario não existe")
+
+        # Testar cubagem
+        if hasattr(st.session_state, 'dados_cubagem'):
+            dados = st.session_state.dados_cubagem
+            if dados is not None and len(dados) > 0:
+                st.sidebar.success(f"✅ Cubagem: {len(dados)} seções")
+
+                try:
+                    arvores = dados['arv'].nunique()
+                    st.sidebar.success(f"✅ Acesso OK: {arvores} árvores")
+                except Exception as e:
+                    st.sidebar.error(f"❌ Erro acesso: {e}")
+            else:
+                st.sidebar.error("❌ Cubagem existe mas está vazia/inválida")
+        else:
+            st.sidebar.error("❌ dados_cubagem não existe")
+
+        # Mostrar todas as keys relevantes
+        st.sidebar.write("**Keys relevantes:**")
+        keys_relevantes = [k for k in st.session_state.keys()
+                           if any(termo in k.lower() for termo in ['dados', 'inventario', 'cubagem', 'arquivo'])]
+
+        for key in keys_relevantes:
+            valor = st.session_state[key]
+            if hasattr(valor, '__len__'):
+                st.sidebar.caption(f"• {key}: {type(valor).__name__} ({len(valor)})")
+            else:
+                st.sidebar.caption(f"• {key}: {type(valor).__name__}")
+
+teste_persistencia_sidebar()

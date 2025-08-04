@@ -22,7 +22,6 @@ except ImportError as e:
     st.error(f"❌ Erro de importação: {e}")
     st.stop()
 
-# NOVO: Importar configurações centralizadas com tratamento de erro
 try:
     from config.configuracoes_globais import (
         obter_configuracao_global,
@@ -38,7 +37,6 @@ st.set_page_config(
     page_icon="📊",
     layout="wide"
 )
-
 
 def gerar_key_unica(base_key):
     """Gera uma key única para evitar conflitos"""
@@ -90,6 +88,76 @@ def verificar_prerequisitos():
         return False
 
     return True
+def converter_dados_volumetricos_brasileiros(df_volumes):
+    """
+    Converte dados volumétricos do formato brasileiro usando validação existente
+
+    Args:
+        df_volumes: DataFrame com dados em formato brasileiro
+
+    Returns:
+        DataFrame com dados convertidos e validados
+    """
+    print("🇧🇷 Convertendo dados volumétricos do formato brasileiro...")
+
+    df = df_volumes.copy()
+
+    # Detectar e converter colunas numéricas
+    colunas_converter = ['D_cm', 'H_m', 'V']
+
+    for coluna in colunas_converter:
+        if coluna in df.columns:
+            print(f"  Processando {coluna}...")
+
+            # Detectar tipo da coluna
+            tipo_detectado = detectar_tipo_coluna(df[coluna], coluna)
+            print(f"    Tipo detectado: {tipo_detectado}")
+
+            # Converter valores do formato brasileiro
+            def converter_valor_brasileiro(valor):
+                if pd.isna(valor):
+                    return np.nan
+                if isinstance(valor, (int, float)):
+                    return float(valor)
+                if isinstance(valor, str):
+                    valor = valor.strip()
+                    if valor == '' or valor.lower() == 'nan':
+                        return np.nan
+                    try:
+                        # Formato brasileiro: vírgula para decimal
+                        valor_convertido = valor.replace(',', '.')
+                        return float(valor_convertido)
+                    except (ValueError, TypeError):
+                        return np.nan
+                return np.nan
+
+            # Aplicar conversão
+            valores_originais = df[coluna].iloc[:3].tolist()
+            df[coluna] = df[coluna].apply(converter_valor_brasileiro)
+            valores_convertidos = df[coluna].iloc[:3].tolist()
+
+            print(f"    Exemplo conversão: {valores_originais} → {valores_convertidos}")
+
+            # Validar usando função existente
+            limites = {}
+            if coluna == 'D_cm':
+                limites = {'min': 1, 'max': 100}
+            elif coluna == 'H_m':
+                limites = {'min': 1, 'max': 50}
+            elif coluna == 'V':
+                limites = {'min': 0.001, 'max': 5}
+
+            validacao = validar_dados_numericos(df[coluna], coluna, limites)
+
+            if validacao['valida']:
+                stats = validacao['estatisticas']
+                print(f"    ✅ {stats['validos']}/{stats['total']} valores convertidos com sucesso")
+            else:
+                print(f"    ⚠️ Problemas na conversão:")
+                for problema in validacao['problemas'][:2]:  # Mostrar só os primeiros 2
+                    print(f"      • {problema}")
+
+    return df
 
 
 def mostrar_configuracao_aplicada_cubagem():

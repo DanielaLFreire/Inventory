@@ -34,7 +34,7 @@ from processors.las_processor_integrado import (
     integrar_com_pagina_lidar
 )
 
-# Importar configurações
+# Importar configurações centralizadas
 from config.configuracoes_globais import (
     obter_configuracao_global,
     mostrar_status_configuracao_sidebar
@@ -44,6 +44,7 @@ from config.config import MENSAGENS_AJUDA_LIDAR, CORES_LIDAR
 
 # Importar utilitários
 from utils.formatacao import formatar_brasileiro, formatar_numero_inteligente
+
 
 st.set_page_config(
     page_title="Dados LiDAR",
@@ -435,7 +436,7 @@ def mostrar_outliers_detectados(outliers):
 
 
 def mostrar_analise_estrutural(df_integrado):
-    """Mostra análise estrutural baseada em LiDAR"""
+    """Mostra análise estrutural baseada em LiDAR - VERSÃO CORRIGIDA"""
     st.header("🌲 Análise Estrutural Florestal")
 
     if 'altura_media' not in df_integrado.columns:
@@ -444,6 +445,10 @@ def mostrar_analise_estrutural(df_integrado):
 
     # Métricas estruturais gerais
     dados_estruturais = df_integrado.dropna(subset=['altura_media'])
+
+    if len(dados_estruturais) == 0:
+        st.error("❌ Nenhum dado estrutural válido encontrado")
+        return
 
     col1, col2, col3, col4 = st.columns(4)
 
@@ -476,91 +481,176 @@ def mostrar_analise_estrutural(df_integrado):
     # Análise por talhão
     mostrar_analise_por_talhao(dados_estruturais)
 
-    # Gráficos estruturais
+    # Gráficos estruturais - usar a função corrigida
     mostrar_graficos_estruturais(dados_estruturais)
 
 
 def mostrar_analise_por_talhao(dados_estruturais):
-    """Mostra análise estrutural por talhão"""
+    """Mostra análise estrutural por talhão - VERSÃO CORRIGIDA"""
     st.subheader("📊 Análise por Talhão")
 
-    # Calcular estatísticas por talhão
-    stats_talhao = dados_estruturais.groupby('talhao').agg({
-        'altura_media': ['mean', 'std', 'count'],
-        'desvio_altura': 'mean' if 'desvio_altura' in dados_estruturais.columns else lambda x: None,
-        'cobertura': 'mean' if 'cobertura' in dados_estruturais.columns else lambda x: None
-    }).round(2)
+    try:
+        # Verificar se há dados suficientes
+        if 'talhao' not in dados_estruturais.columns:
+            st.warning("⚠️ Coluna 'talhao' não encontrada")
+            return
 
-    # Achatar colunas multi-nível
-    stats_talhao.columns = [f"{col[0]}_{col[1]}" if col[1] != '<lambda>' else col[0]
-                            for col in stats_talhao.columns]
+        # Calcular estatísticas por talhão
+        agg_dict = {
+            'altura_media': ['mean', 'std', 'count']
+        }
 
-    stats_talhao = stats_talhao.reset_index()
+        # Adicionar outras métricas se disponíveis
+        if 'desvio_altura' in dados_estruturais.columns:
+            agg_dict['desvio_altura'] = 'mean'
+        if 'cobertura' in dados_estruturais.columns:
+            agg_dict['cobertura'] = 'mean'
 
-    # Renomear para exibição
-    colunas_rename = {
-        'altura_media_mean': 'Altura Média (m)',
-        'altura_media_std': 'Desvio Padrão (m)',
-        'altura_media_count': 'N° Parcelas',
-        'desvio_altura': 'Variabilidade (m)',
-        'cobertura': 'Cobertura (%)'
-    }
+        stats_talhao = dados_estruturais.groupby('talhao').agg(agg_dict).round(2)
 
-    stats_display = stats_talhao.rename(columns=colunas_rename)
+        # Achatar colunas multi-nível
+        if hasattr(stats_talhao.columns, 'levels'):
+            stats_talhao.columns = [f"{col[0]}_{col[1]}" if len(col) > 1 and col[1] != '' else col[0]
+                                    for col in stats_talhao.columns]
 
-    # Filtrar apenas colunas existentes
-    colunas_existentes = [col for col in colunas_rename.values() if col in stats_display.columns]
-    colunas_mostrar = ['talhao'] + colunas_existentes
+        stats_talhao = stats_talhao.reset_index()
 
-    st.dataframe(stats_display[colunas_mostrar], hide_index=True, use_container_width=True)
+        # Renomear para exibição
+        rename_map = {
+            'altura_media_mean': 'Altura Média (m)',
+            'altura_media_std': 'Desvio Padrão (m)',
+            'altura_media_count': 'N° Parcelas'
+        }
+
+        if 'desvio_altura' in stats_talhao.columns:
+            rename_map['desvio_altura'] = 'Variabilidade (m)'
+        if 'cobertura' in stats_talhao.columns:
+            rename_map['cobertura'] = 'Cobertura (%)'
+
+        stats_display = stats_talhao.rename(columns=rename_map)
+
+        # Filtrar apenas colunas existentes
+        colunas_existentes = [col for col in rename_map.values() if col in stats_display.columns]
+        colunas_mostrar = ['talhao'] + colunas_existentes
+
+        st.dataframe(stats_display[colunas_mostrar], hide_index=True, use_container_width=True)
+
+        # Mostrar resumo estatístico
+        st.info(
+            f"📊 **Resumo:** {len(stats_display)} talhões analisados com {dados_estruturais['altura_media'].count()} parcelas no total")
+
+    except Exception as e:
+        st.error(f"❌ Erro na análise por talhão: {str(e)}")
+        st.info("Mostrando dados brutos disponíveis:")
+        st.dataframe(dados_estruturais.head(), use_container_width=True)
 
 
 def mostrar_graficos_estruturais(dados_estruturais):
-    """Mostra gráficos da análise estrutural"""
+    """Mostra gráficos da análise estrutural - VERSÃO CORRIGIDA"""
     st.subheader("📊 Distribuições Estruturais")
+
+    # Verificar se há dados suficientes
+    if len(dados_estruturais) == 0 or 'altura_media' not in dados_estruturais.columns:
+        st.warning("⚠️ Dados insuficientes para gráficos estruturais")
+        return
+
+    # Filtrar dados válidos
+    dados_estruturais = dados_estruturais.dropna(subset=['altura_media'])
+    if len(dados_estruturais) == 0:
+        st.warning("⚠️ Nenhum dado de altura válido encontrado")
+        return
 
     col1, col2 = st.columns(2)
 
     with col1:
-        # Distribuição de alturas por talhão
+        # Distribuição de alturas por talhão - CORRIGIDO
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        talhoes = sorted(dados_estruturais['talhao'].unique())
-        dados_boxplot = [dados_estruturais[dados_estruturais['talhao'] == t]['altura_media'].values
-                         for t in talhoes]
+        try:
+            talhoes = sorted(dados_estruturais['talhao'].unique())
 
-        bp = ax.boxplot(dados_boxplot, labels=[f'T{t}' for t in talhoes], patch_artist=True)
+            # Preparar dados do boxplot - filtrar apenas talhões com dados
+            dados_boxplot = []
+            labels_validos = []
 
-        # Colorir boxes
-        for patch in bp['boxes']:
-            patch.set_facecolor(CORES_LIDAR['lidar'])
-            patch.set_alpha(0.7)
+            for t in talhoes:
+                dados_talhao = dados_estruturais[dados_estruturais['talhao'] == t]['altura_media'].dropna()
+                if len(dados_talhao) > 0:  # Só incluir se houver dados
+                    dados_boxplot.append(dados_talhao.values)
+                    labels_validos.append(f'T{t}')
 
-        ax.set_xlabel('Talhão')
-        ax.set_ylabel('Altura LiDAR (m)')
-        ax.set_title('Distribuição de Alturas por Talhão')
-        ax.grid(True, alpha=0.3)
+            if len(dados_boxplot) > 0:
+                bp = ax.boxplot(dados_boxplot, labels=labels_validos, patch_artist=True)
+
+                # Colorir boxes
+                for patch in bp['boxes']:
+                    patch.set_facecolor('#2E8B57')  # SeaGreen
+                    patch.set_alpha(0.7)
+
+                ax.set_xlabel('Talhão')
+                ax.set_ylabel('Altura LiDAR (m)')
+                ax.set_title('Distribuição de Alturas por Talhão')
+                ax.grid(True, alpha=0.3)
+
+                # Rotacionar labels se necessário
+                if len(labels_validos) > 5:
+                    plt.xticks(rotation=45)
+            else:
+                ax.text(0.5, 0.5, 'Dados insuficientes\npara boxplot',
+                        ha='center', va='center', transform=ax.transAxes)
+                ax.set_title('Distribuição de Alturas por Talhão')
+
+        except Exception as e:
+            ax.text(0.5, 0.5, f'Erro no gráfico:\n{str(e)}',
+                    ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Distribuição de Alturas por Talhão - Erro')
 
         st.pyplot(fig)
         plt.close(fig)
 
     with col2:
-        # Histograma geral de alturas
+        # Histograma geral de alturas - CORRIGIDO
         fig, ax = plt.subplots(figsize=(10, 6))
 
-        ax.hist(dados_estruturais['altura_media'], bins=20, alpha=0.7,
-                color=CORES_LIDAR['lidar'], edgecolor='black')
+        try:
+            alturas_validas = dados_estruturais['altura_media'].dropna()
 
-        # Linha da média
-        media = dados_estruturais['altura_media'].mean()
-        ax.axvline(media, color='red', linestyle='--', linewidth=2,
-                   label=f'Média: {media:.1f}m')
+            if len(alturas_validas) > 0:
+                # Determinar número de bins apropriado
+                n_bins = min(20, max(5, len(alturas_validas) // 3))
 
-        ax.set_xlabel('Altura LiDAR (m)')
-        ax.set_ylabel('Frequência')
-        ax.set_title('Distribuição Geral de Alturas')
-        ax.legend()
-        ax.grid(True, alpha=0.3)
+                ax.hist(alturas_validas, bins=n_bins, alpha=0.7,
+                        color='#4682B4', edgecolor='black')  # SteelBlue
+
+                # Linha da média
+                media = alturas_validas.mean()
+                ax.axvline(media, color='red', linestyle='--', linewidth=2,
+                           label=f'Média: {media:.1f}m')
+
+                ax.set_xlabel('Altura LiDAR (m)')
+                ax.set_ylabel('Frequência')
+                ax.set_title('Distribuição Geral de Alturas')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+
+                # Adicionar estatísticas no gráfico
+                ax.text(0.02, 0.98,
+                        f'N: {len(alturas_validas)}\n'
+                        f'Média: {media:.1f}m\n'
+                        f'Std: {alturas_validas.std():.1f}m\n'
+                        f'Min: {alturas_validas.min():.1f}m\n'
+                        f'Max: {alturas_validas.max():.1f}m',
+                        transform=ax.transAxes, verticalalignment='top',
+                        bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8))
+            else:
+                ax.text(0.5, 0.5, 'Dados insuficientes\npara histograma',
+                        ha='center', va='center', transform=ax.transAxes)
+                ax.set_title('Distribuição Geral de Alturas - Sem Dados')
+
+        except Exception as e:
+            ax.text(0.5, 0.5, f'Erro no gráfico:\n{str(e)}',
+                    ha='center', va='center', transform=ax.transAxes)
+            ax.set_title('Distribuição Geral de Alturas - Erro')
 
         st.pyplot(fig)
         plt.close(fig)

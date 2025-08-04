@@ -20,7 +20,7 @@ def inicializar_configuracoes_globais():
             # Filtros de dados
             'talhoes_excluir': [],
             'diametro_min': 4.0,
-            'codigos_excluir': ['C', 'I'],
+            'codigos_excluir': [],
 
             # Configurações de áreas
             'metodo_area': 'Simular automaticamente',
@@ -260,7 +260,7 @@ def configurar_filtros_dados(df_inventario):
         codigos_excluir = st.multiselect(
             "🏷️ Códigos a Excluir",
             options=codigos_disponiveis_nativos,
-            default=[str(c) for c in st.session_state.config_global.get('codigos_excluir', ['C', 'I'])],
+            #default=[str(c) for c in st.session_state.config_global.get('codigos_excluir', ['C', 'I'])],
             help="Códigos de árvores excluídos (C=Cortada, I=Invasora)",
             key="global_codigos_excluir"
         )
