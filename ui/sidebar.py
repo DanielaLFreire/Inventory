@@ -336,8 +336,6 @@ def criar_sidebar():
     '''
     st.sidebar.header("📁 Upload de Dados")
 
-    mostrar_debug_persistencia_sidebar()
-
     # Upload do arquivo de inventário
     arquivo_inventario = st.sidebar.file_uploader(
         "📋 Arquivo de Inventário",
@@ -1318,62 +1316,6 @@ def obter_status_sistema_completo():
         }
 
 
-def mostrar_debug_persistencia_sidebar():
-    """
-    NOVA FUNÇÃO: Debug da persistência dos dados na sidebar
-    """
-    if st.sidebar.checkbox("🔍 Debug Persistência", key="debug_persistencia"):
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("🔧 Status Persistência")
-
-        # Verificar dados de inventário
-        if hasattr(st.session_state, 'dados_inventario'):
-            dados = st.session_state.dados_inventario
-            if dados is not None and len(dados) > 0:
-                st.sidebar.success(f"✅ Inventário: {len(dados)} reg")
-                st.sidebar.caption(f"Talhões: {dados['talhao'].nunique()}")
-            else:
-                st.sidebar.error("❌ Inventário vazio")
-        else:
-            st.sidebar.error("❌ Inventário: não existe")
-
-        # Verificar dados de cubagem
-        if hasattr(st.session_state, 'dados_cubagem'):
-            dados = st.session_state.dados_cubagem
-            if dados is not None and len(dados) > 0:
-                st.sidebar.success(f"✅ Cubagem: {dados['arv'].nunique()} árv")
-                st.sidebar.caption(f"Seções: {len(dados)}")
-            else:
-                st.sidebar.error("❌ Cubagem vazia")
-        else:
-            st.sidebar.error("❌ Cubagem: não existe")
-
-        # Verificar flags
-        if hasattr(st.session_state, 'arquivos_carregados'):
-            if st.session_state.arquivos_carregados:
-                st.sidebar.success("✅ Flag ativa")
-            else:
-                st.sidebar.warning("⚠️ Flag False")
-        else:
-            st.sidebar.error("❌ Flag não existe")
-
-        # Timestamps
-        if hasattr(st.session_state, 'timestamp_carregamento_inventario'):
-            timestamp = st.session_state.timestamp_carregamento_inventario
-            tempo_decorrido = pd.Timestamp.now() - timestamp
-            minutos = int(tempo_decorrido.total_seconds() / 60)
-            st.sidebar.caption(f"⏰ Inventário: há {minutos}min")
-
-        # Botão para limpar e recarregar
-        if st.sidebar.button("🔄 Forçar Recarregamento"):
-            # Limpar session_state
-            keys_para_limpar = ['dados_inventario', 'dados_cubagem', 'arquivos_carregados']
-            for key in keys_para_limpar:
-                if hasattr(st.session_state, key):
-                    delattr(st.session_state, key)
-            st.sidebar.success("🗑️ Session state limpo - recarregue arquivos")
-            st.rerun()
-
 
 def teste_persistencia_sidebar():
     """
@@ -1428,4 +1370,4 @@ def teste_persistencia_sidebar():
             else:
                 st.sidebar.caption(f"• {key}: {type(valor).__name__}")
 
-teste_persistencia_sidebar()
+#teste_persistencia_sidebar()

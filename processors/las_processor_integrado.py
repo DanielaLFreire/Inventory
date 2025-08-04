@@ -402,7 +402,7 @@ def criar_interface_processamento_las():
     Cria interface completa para processamento de arquivos LAS/LAZ
     Para uso na página LiDAR
     """
-    st.subheader("🛩️ Processamento Direto de Arquivos LAS/LAZ")
+    #st.subheader("🛩️ Processamento Direto de Arquivos LAS/LAZ")
 
     # Informações sobre o processamento
     with st.expander("ℹ️ Sobre o Processamento LAS/LAZ"):
