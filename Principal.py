@@ -1035,6 +1035,8 @@ def main():
         # Inicializar configurações globais
         inicializar_configuracoes_globais()
 
+        #st.image("./images/logo.png")
+
         # Criar cabeçalho
         criar_cabecalho_greenvista("Página Principal")
 

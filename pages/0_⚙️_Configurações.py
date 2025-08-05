@@ -1,6 +1,6 @@
-# pages/0_⚙️_Configurações.py - VERSÃO PADRONIZADA
+# pages/0_⚙️_Configurações.py - VERSÃO LIMPA E OBJETIVA
 """
-Página de Configurações Globais - COM IDENTIDADE VISUAL PADRONIZADA
+Página de Configurações Globais - VERSÃO LIMPA
 Centraliza todas as configurações do sistema em um local único
 """
 
@@ -16,8 +16,7 @@ from config.configuracoes_globais import (
 from ui.components import (
     configurar_pagina_greenvista,
     criar_cabecalho_greenvista,
-    criar_navegacao_rapida_botoes,
-    mostrar_alertas_sistema
+    criar_navegacao_rapida_botoes
 )
 from ui.sidebar import criar_sidebar_melhorada
 
@@ -25,98 +24,13 @@ from ui.sidebar import criar_sidebar_melhorada
 configurar_pagina_greenvista("Configurações Globais", "⚙️")
 
 
-def mostrar_navegacao_rapida_header():
-    """Mostra navegação rápida no cabeçalho"""
-    st.markdown("### 🚀 Navegação Rápida")
-
-    config_atual = obter_configuracao_global()
-    configurado = config_atual.get('configurado', False)
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        st.markdown("""
-        **⚙️ Etapa 0 Configurações**
-
-        ✅ Ativa
-
-        *Configure filtros, áreas e parâmetros*
-        """)
-
-    with col2:
-        if configurado:
-            st.markdown("""
-            **🌳 Etapa 1 Hipsométricos**
-
-            ⚡ Disponível
-
-            *Modelos altura-diâmetro*
-            """)
-        else:
-            st.markdown("""
-            **🌳 Etapa 1 Hipsométricos**
-
-            ⏳ Configure primeiro
-
-            *Modelos altura-diâmetro*
-            """)
-
-    with col3:
-        if configurado:
-            st.markdown("""
-            **📊 Etapa 2 Volumétricos**
-
-            ⚡ Disponível  
-
-            *Cubagem e volume*
-            """)
-        else:
-            st.markdown("""
-            **📊 Etapa 2 Volumétricos**
-
-            ⏳ Configure primeiro
-
-            *Cubagem e volume*
-            """)
-
-    with col4:
-        if configurado:
-            st.markdown("""
-            **📈 Etapa 3 Inventário**
-
-            ⚡ Disponível
-
-            *Relatórios finais*
-            """)
-        else:
-            st.markdown("""
-            **📈 Etapa 3 Inventário**
-
-            ⏳ Configure primeiro
-
-            *Relatórios finais*
-            """)
-
-    # Progresso
-    progresso_texto = "Progresso: 0/4 etapas concluídas" if not configurado else "Progresso: 1/4 etapas concluídas"
-    st.caption(progresso_texto)
-
-    st.markdown("---")
-
-
 def verificar_dados_carregados():
     """Verifica se os dados básicos estão carregados"""
     if not hasattr(st.session_state, 'dados_inventario') or st.session_state.dados_inventario is None:
         st.warning("⚠️ Carregue os dados de inventário primeiro na página principal")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🏠 Ir para Página Principal", use_container_width=True):
-                st.switch_page("Principal.py")
-
-        with col2:
-            if st.button("🔄 Atualizar Página", use_container_width=True):
-                st.rerun()
+        if st.button("🏠 Ir para Página Principal", use_container_width=True):
+            st.switch_page("Principal.py")
 
         return False
 
@@ -133,7 +47,7 @@ def mostrar_introducao():
     - **🔍 Filtros de Dados**: Aplicados em todas as 3 etapas
     - **📏 Áreas dos Talhões**: Usadas no inventário final  
     - **🌱 Parâmetros Florestais**: Para cálculos de biomassa e carbono
-    - **🧮 Configurações de Modelos**: Ajustes avançados dos algoritmos (incluindo parâmetros não-lineares)
+    - **🧮 Configurações de Modelos**: Ajustes avançados dos algoritmos
 
     > **💡 Vantagem**: Configure uma vez, use em todas as etapas automaticamente!
     """)
@@ -164,7 +78,6 @@ def mostrar_impacto_configuracao():
             - ✅ Modelos não-lineares
             - ✅ Máximo iterações
             - ✅ Tolerância ajuste
-            - ✅ Parâmetros iniciais (Chapman, Weibull, Mononuclear)
             """)
 
         with col2:
@@ -225,48 +138,15 @@ def verificar_arquivos_opcionais():
         'coordenadas_nome': None
     }
 
-    # Verificar shapefile de múltiplas formas
-    shapefile_encontrado = False
-    shapefile_nome = None
+    # Verificar shapefile
+    if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
+        status_arquivos['shapefile_disponivel'] = True
+        status_arquivos['shapefile_nome'] = st.session_state.arquivo_shapefile.name
 
-    # 1. Verificar upload atual na sessão
-    if hasattr(st.session_state, 'arquivo_shapefile'):
-        if st.session_state.arquivo_shapefile is not None:
-            shapefile_encontrado = True
-            shapefile_nome = st.session_state.arquivo_shapefile.name
-
-    # 2. Verificar se foi carregado via file_uploader (pode estar em outros states)
-    for key in st.session_state.keys():
-        if 'shapefile' in key.lower() and st.session_state[key] is not None:
-            if hasattr(st.session_state[key], 'name'):
-                shapefile_encontrado = True
-                shapefile_nome = st.session_state[key].name
-                break
-
-    # Verificar coordenadas de múltiplas formas
-    coordenadas_encontradas = False
-    coordenadas_nome = None
-
-    # 1. Verificar upload atual na sessão
-    if hasattr(st.session_state, 'arquivo_coordenadas'):
-        if st.session_state.arquivo_coordenadas is not None:
-            coordenadas_encontradas = True
-            coordenadas_nome = st.session_state.arquivo_coordenadas.name
-
-    # 2. Verificar se foi carregado via file_uploader (pode estar em outros states)
-    for key in st.session_state.keys():
-        if 'coordenadas' in key.lower() and st.session_state[key] is not None:
-            if hasattr(st.session_state[key], 'name'):
-                coordenadas_encontradas = True
-                coordenadas_nome = st.session_state[key].name
-                break
-
-    status_arquivos.update({
-        'shapefile_disponivel': shapefile_encontrado,
-        'coordenadas_disponivel': coordenadas_encontradas,
-        'shapefile_nome': shapefile_nome,
-        'coordenadas_nome': coordenadas_nome
-    })
+    # Verificar coordenadas
+    if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
+        status_arquivos['coordenadas_disponivel'] = True
+        status_arquivos['coordenadas_nome'] = st.session_state.arquivo_coordenadas.name
 
     return status_arquivos
 
@@ -297,42 +177,6 @@ def mostrar_status_arquivos_opcionais():
                 st.caption("Upload na página principal para habilitar")
 
 
-def mostrar_navegacao_final():
-    """Navegação final para as etapas"""
-    st.markdown("---")
-    st.subheader("🚀 Navegação para Próximas Etapas")
-
-    config_atual = obter_configuracao_global()
-    configurado = config_atual.get('configurado', False)
-
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        if st.button("🏠 Página Principal", use_container_width=True):
-            st.switch_page("Principal.py")
-
-    with col2:
-        disabled_hip = not configurado
-        if st.button("🌳 Etapa 1: Hipsométricos", use_container_width=True, disabled=disabled_hip):
-            st.switch_page("pages/1_🌳_Modelos_Hipsométricos.py")
-        if disabled_hip:
-            st.caption("Configure primeiro")
-
-    with col3:
-        disabled_vol = not configurado
-        if st.button("📊 Etapa 2: Volumétricos", use_container_width=True, disabled=disabled_vol):
-            st.switch_page("pages/2_📊_Modelos_Volumétricos.py")
-        if disabled_vol:
-            st.caption("Configure primeiro")
-
-    with col4:
-        disabled_inv = not configurado
-        if st.button("📈 Etapa 3: Inventário", use_container_width=True, disabled=disabled_inv):
-            st.switch_page("pages/3_📈_Inventário_Florestal.py")
-        if disabled_inv:
-            st.caption("Configure primeiro")
-
-
 def main():
     # Inicializar configurações globais
     inicializar_configuracoes_globais()
@@ -342,9 +186,6 @@ def main():
 
     # Criar sidebar padronizada
     criar_sidebar_melhorada()
-
-    # Mostrar navegação rápida
-    mostrar_navegacao_rapida_header()
 
     # Mostrar introdução
     mostrar_introducao()
@@ -366,53 +207,25 @@ def main():
     st.markdown("---")
     configuracoes = mostrar_configuracoes_globais()
 
-    # Navegação final
-    mostrar_navegacao_final()
-
-    # Informações adicionais
+    # Informações importantes (simplificadas)
     with st.expander("ℹ️ Informações Importantes"):
         st.markdown("""
-        ### 📋 **Como Usar as Configurações Centralizadas**
+        ### 📋 **Como Usar**
 
         1. **🔧 Configure uma vez**: Defina todos os parâmetros nesta página
         2. **🚀 Execute as etapas**: As configurações serão aplicadas automaticamente
         3. **✏️ Ajuste conforme necessário**: Volte aqui para modificar configurações
-        4. **🔄 Re-execute se necessário**: Mudanças importantes podem requerer nova execução
-
-        ### 🎯 **Configurações Críticas**
-
-        - **Talhões excluídos**: Afeta TODAS as análises
-        - **Diâmetro mínimo**: Impacta número de árvores consideradas
-        - **Método de área**: Define como calcular estoques por talhão
-        - **Modelos não-lineares**: Aumenta tempo de processamento mas pode melhorar precisão
-        - **Parâmetros iniciais**: Fundamentais para convergência dos modelos não-lineares
-
-        ### 💾 **Persistência**
-
-        - Configurações ficam salvas durante toda a sessão
-        - Use "Exportar" para salvar permanentemente
-        - "Resetar Padrão" volta às configurações iniciais
 
         ### ⚠️ **Avisos**
 
         - Mudanças nas configurações invalidam resultados anteriores
         - Filtros muito restritivos podem reduzir drasticamente os dados
         - Configurações de área impactam diretamente os estoques calculados
-        - Parâmetros inadequados podem impedir convergência dos modelos não-lineares
-
-        ### 📁 **Arquivos Opcionais**
-
-        - **Shapefile**: Carregue na página principal para habilitar método "Upload shapefile"
-        - **Coordenadas**: Carregue na página principal para habilitar método "Coordenadas das parcelas"
-        - Estes arquivos ficam persistentes na sessão após o upload
         """)
 
-    # Navegação rápida final
+    # Navegação rápida final (apenas uma vez)
     st.markdown("---")
     criar_navegacao_rapida_botoes()
-
-    # Mostrar alertas do sistema
-    mostrar_alertas_sistema()
 
 
 if __name__ == "__main__":
