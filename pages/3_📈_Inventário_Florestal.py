@@ -25,11 +25,15 @@ from utils.formatacao import (
     formatar_numero_inteligente
 )
 
-st.set_page_config(
-    page_title="Inventário Florestal",
-    page_icon="📈",
-    layout="wide"
+# Importar componentes de UI para manter identidade visual
+from ui.components import (
+    configurar_pagina_greenvista,
+    criar_cabecalho_greenvista,
+    criar_navegacao_rapida_botoes
 )
+
+# Configurar página com identidade visual
+configurar_pagina_greenvista("Inventário Florestal", "📈")
 
 
 def gerar_key_unica(base_key):
@@ -602,12 +606,10 @@ def executar_inventario_completo(config_areas, parametros):
             st.error("❌ Nenhum registro restou após filtros")
             return
 
-
         # 4. VERIFICAR COMPATIBILIDADE ÁREAS × INVENTÁRIO
 
         talhoes_inventario = set(df_filtrado['talhao'].unique())
         talhoes_areas = set(df_areas['talhao'].unique())
-
 
         talhoes_comuns = talhoes_inventario & talhoes_areas
         talhoes_sem_area = talhoes_inventario - talhoes_areas
@@ -628,12 +630,10 @@ def executar_inventario_completo(config_areas, parametros):
         df_com_areas = df_filtrado.merge(df_areas, on='talhao', how='left')
         df_com_areas['area_ha'] = df_com_areas['area_ha'].fillna(25.0)
 
-
         # 6. APLICAR MODELOS
 
         melhor_hip = st.session_state.resultados_hipsometricos['melhor_modelo']
         melhor_vol = st.session_state.resultados_volumetricos['melhor_modelo']
-
 
         # Estimar alturas
         df_com_alturas = estimar_alturas_inventario(df_com_areas, melhor_hip)
@@ -1111,11 +1111,11 @@ def gerar_relatorio_executivo_melhorado(resultados):
 
 
 def main():
+    # Criar cabeçalho com identidade visual
+    criar_cabecalho_greenvista("Inventário Florestal")
+
     if not verificar_prerequisitos():
         return
-
-    st.title("📈 Inventário Florestal")
-    st.markdown("### Processamento Completo e Relatórios Finais")
 
     # NOVO: Mostrar status da configuração na sidebar
     mostrar_status_configuracao_sidebar()
@@ -1158,6 +1158,9 @@ def main():
         if st.checkbox("👀 Mostrar Resultados Salvos", key="mostrar_resultados_salvos_inv"):
             mostrar_resultados_inventario(resultados_salvos)
 
+        # Navegação rápida
+        st.markdown("---")
+        criar_navegacao_rapida_botoes()
         return
 
     # NOVO: Configurar áreas usando configurações centralizadas
@@ -1202,6 +1205,10 @@ def main():
     # Botão principal para executar
     if st.button("🚀 Executar Inventário Completo", type="primary", use_container_width=True):
         executar_inventario_completo(config_areas, parametros)
+
+    # Navegação rápida
+    st.markdown("---")
+    criar_navegacao_rapida_botoes()
 
 
 if __name__ == "__main__":

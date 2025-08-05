@@ -1,8 +1,7 @@
-# pages/2_📊_Modelos_Volumétricos.py - VERSÃO CORRIGIDA
+# pages/2_📊_Modelos_Volumétricos.py - VERSÃO PADRONIZADA
 """
-Etapa 2: Modelos Volumétricos - USANDO CONFIGURAÇÕES CENTRALIZADAS
+Etapa 2: Modelos Volumétricos - COM IDENTIDADE VISUAL PADRONIZADA
 Cubagem e análise de modelos de volume com filtros globais
-CORRIGIDO: Imports, verificações de pré-requisitos e tratamento de erros
 """
 
 import streamlit as st
@@ -32,11 +31,18 @@ except ImportError as e:
     st.error(f"❌ Erro ao importar configurações: {e}")
     st.stop()
 
-st.set_page_config(
-    page_title="Modelos Volumétricos",
-    page_icon="📊",
-    layout="wide"
+# Importar componentes visuais padronizados
+from ui.components import (
+    configurar_pagina_greenvista,
+    criar_cabecalho_greenvista,
+    criar_navegacao_rapida_botoes,
+    mostrar_alertas_sistema
 )
+from ui.sidebar import criar_sidebar_melhorada
+
+# Configurar página com identidade visual
+configurar_pagina_greenvista("Modelos Volumétricos", "📊")
+
 
 def gerar_key_unica(base_key):
     """Gera uma key única para evitar conflitos"""
@@ -45,7 +51,7 @@ def gerar_key_unica(base_key):
 
 
 def verificar_prerequisitos():
-    """Verifica se pré-requisitos estão atendidos - VERSÃO CORRIGIDA"""
+    """Verifica se pré-requisitos estão atendidos"""
     problemas = []
 
     # Verificar dados carregados
@@ -88,76 +94,6 @@ def verificar_prerequisitos():
         return False
 
     return True
-def converter_dados_volumetricos_brasileiros(df_volumes):
-    """
-    Converte dados volumétricos do formato brasileiro usando validação existente
-
-    Args:
-        df_volumes: DataFrame com dados em formato brasileiro
-
-    Returns:
-        DataFrame com dados convertidos e validados
-    """
-    print("🇧🇷 Convertendo dados volumétricos do formato brasileiro...")
-
-    df = df_volumes.copy()
-
-    # Detectar e converter colunas numéricas
-    colunas_converter = ['D_cm', 'H_m', 'V']
-
-    for coluna in colunas_converter:
-        if coluna in df.columns:
-            print(f"  Processando {coluna}...")
-
-            # Detectar tipo da coluna
-            tipo_detectado = detectar_tipo_coluna(df[coluna], coluna)
-            print(f"    Tipo detectado: {tipo_detectado}")
-
-            # Converter valores do formato brasileiro
-            def converter_valor_brasileiro(valor):
-                if pd.isna(valor):
-                    return np.nan
-                if isinstance(valor, (int, float)):
-                    return float(valor)
-                if isinstance(valor, str):
-                    valor = valor.strip()
-                    if valor == '' or valor.lower() == 'nan':
-                        return np.nan
-                    try:
-                        # Formato brasileiro: vírgula para decimal
-                        valor_convertido = valor.replace(',', '.')
-                        return float(valor_convertido)
-                    except (ValueError, TypeError):
-                        return np.nan
-                return np.nan
-
-            # Aplicar conversão
-            valores_originais = df[coluna].iloc[:3].tolist()
-            df[coluna] = df[coluna].apply(converter_valor_brasileiro)
-            valores_convertidos = df[coluna].iloc[:3].tolist()
-
-            print(f"    Exemplo conversão: {valores_originais} → {valores_convertidos}")
-
-            # Validar usando função existente
-            limites = {}
-            if coluna == 'D_cm':
-                limites = {'min': 1, 'max': 100}
-            elif coluna == 'H_m':
-                limites = {'min': 1, 'max': 50}
-            elif coluna == 'V':
-                limites = {'min': 0.001, 'max': 5}
-
-            validacao = validar_dados_numericos(df[coluna], coluna, limites)
-
-            if validacao['valida']:
-                stats = validacao['estatisticas']
-                print(f"    ✅ {stats['validos']}/{stats['total']} valores convertidos com sucesso")
-            else:
-                print(f"    ⚠️ Problemas na conversão:")
-                for problema in validacao['problemas'][:2]:  # Mostrar só os primeiros 2
-                    print(f"      • {problema}")
-
-    return df
 
 
 def mostrar_configuracao_aplicada_cubagem():
@@ -195,7 +131,7 @@ def mostrar_configuracao_aplicada_cubagem():
 
 
 def processar_cubagem_com_filtros():
-    """Processa cubagem aplicando filtros das configurações globais - VERSÃO CORRIGIDA"""
+    """Processa cubagem aplicando filtros das configurações globais"""
     st.header("🔄 Processamento da Cubagem")
 
     try:
@@ -281,7 +217,7 @@ def processar_cubagem_com_filtros():
 
 
 def mostrar_graficos_cubagem(volumes_arvore, stats_cubagem):
-    """Mostra gráficos da análise de cubagem - VERSÃO CORRIGIDA"""
+    """Mostra gráficos da análise de cubagem"""
     try:
         col1, col2 = st.columns(2)
 
@@ -317,7 +253,7 @@ def mostrar_graficos_cubagem(volumes_arvore, stats_cubagem):
 
 
 def executar_analise_volumetrica(volumes_arvore):
-    """Executa análise volumétrica com configurações centralizadas - VERSÃO CORRIGIDA"""
+    """Executa análise volumétrica com configurações centralizadas"""
     st.header("🚀 Executando Análise Volumétrica")
 
     progress_bar = st.progress(0)
@@ -405,12 +341,7 @@ def mostrar_info_configuracoes_volumetricas(config, resultados):
 
 
 def mostrar_resultados_volumetricos(resultados, predicoes, volumes_arvore, contexto="novo"):
-    """
-    Mostra resultados dos modelos volumétricos - VERSÃO CORRIGIDA PARA KEYS
-
-    Args:
-        contexto: "novo" para execução atual, "salvo" para resultados salvos
-    """
+    """Mostra resultados dos modelos volumétricos"""
     st.header("📊 Resultados dos Modelos Volumétricos")
 
     # Adicionar identificador do contexto
@@ -525,7 +456,7 @@ def mostrar_coeficientes_volumetricos(resultados):
 
 
 def mostrar_downloads_volumetricos(resultados, predicoes, volumes_arvore, sufixo=""):
-    """Mostra opções de download - VERSÃO COM KEYS ÚNICAS"""
+    """Mostra opções de download"""
     try:
         st.subheader("💾 Downloads")
 
@@ -626,7 +557,7 @@ def gerar_relatorio_volumetrico_centralizado(resultados, df_ranking):
 Use o modelo **{melhor['Modelo']}** para estimativas volumétricas neste povoamento.
 
 ---
-*Relatório gerado pelo Sistema de Inventário Florestal com Configurações Centralizadas*
+*Relatório gerado pelo GreenVista - Sistema de Inventário Florestal*
 """
 
         return relatorio
@@ -684,16 +615,19 @@ def mostrar_fundamentos_smalian():
 
 
 def main():
-    """Função principal da página - VERSÃO CORRIGIDA"""
+    """Função principal da página"""
     try:
         # Verificar pré-requisitos
         if not verificar_prerequisitos():
             return
 
-        st.title("📊 Modelos Volumétricos")
-        st.markdown("### Cubagem e Análise de Volume")
+        # Criar cabeçalho padronizado
+        criar_cabecalho_greenvista("Modelos Volumétricos")
 
-        # NOVO: Mostrar status da configuração na sidebar
+        # Criar sidebar padronizada
+        criar_sidebar_melhorada()
+
+        # Mostrar status da configuração na sidebar
         try:
             mostrar_status_configuracao_sidebar()
         except Exception as e:
@@ -746,7 +680,7 @@ def main():
         if st.button("🚀 Executar Análise Volumétrica", type="primary", use_container_width=True):
             executar_analise_volumetrica(volumes_arvore)
 
-        # Mostrar resultados salvos se existirem - COM CONTROLE PARA EVITAR KEYS DUPLICADAS
+        # Mostrar resultados salvos se existirem
         if hasattr(st.session_state, 'resultados_volumetricos') and st.session_state.resultados_volumetricos:
             st.markdown("---")
             st.subheader("📂 Resultados Salvos")
@@ -778,6 +712,13 @@ def main():
                     resultados_salvos['volumes'],
                     "salvo"  # CONTEXTO DIFERENTE PARA EVITAR CONFLITO DE KEYS
                 )
+
+        # Navegação rápida final
+        st.markdown("---")
+        criar_navegacao_rapida_botoes()
+
+        # Mostrar alertas do sistema
+        mostrar_alertas_sistema()
 
     except Exception as e:
         st.error(f"❌ Erro crítico na página: {e}")

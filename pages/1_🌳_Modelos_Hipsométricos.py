@@ -1,8 +1,7 @@
-# pages/1_🌳_Modelos_Hipsométricos.py - VERSÃO ADAPTADA PARA CONFIGURAÇÕES GLOBAIS
+# pages/1_🌳_Modelos_Hipsométricos.py - VERSÃO PADRONIZADA
 """
-Etapa 1: Modelos Hipsométricos - USANDO CONFIGURAÇÕES CENTRALIZADAS
+Etapa 1: Modelos Hipsométricos - COM IDENTIDADE VISUAL PADRONIZADA
 Análise completa da relação altura-diâmetro com filtros globais e parâmetros configurados
-NOVO: Usa parâmetros iniciais dos modelos não-lineares das configurações globais
 """
 
 import streamlit as st
@@ -15,18 +14,24 @@ from models.hipsometrico import ajustar_todos_modelos_hipsometricos, validar_par
 from ui.graficos import criar_graficos_modelos
 from utils.formatacao import formatar_brasileiro, classificar_qualidade_modelo
 
-# NOVO: Importar configurações centralizadas
+# Importar configurações centralizadas
 from config.configuracoes_globais import (
     obter_configuracao_global,
     aplicar_filtros_configuracao_global,
     mostrar_status_configuracao_sidebar
 )
 
-st.set_page_config(
-    page_title="Modelos Hipsométricos",
-    page_icon="🌳",
-    layout="wide"
+# Importar componentes visuais padronizados
+from ui.components import (
+    configurar_pagina_greenvista,
+    criar_cabecalho_greenvista,
+    criar_navegacao_rapida_botoes,
+    mostrar_alertas_sistema
 )
+from ui.sidebar import criar_sidebar_melhorada
+
+# Configurar página com identidade visual
+configurar_pagina_greenvista("Modelos Hipsométricos", "🌳")
 
 
 def gerar_key_unica(base_key):
@@ -96,7 +101,7 @@ def mostrar_configuracao_aplicada():
             st.write(f"• Máximo iterações: {config.get('max_iteracoes', 5000)}")
             st.write(f"• Tolerância: {config.get('tolerancia_ajuste', 0.01)}")
 
-    # NOVO: Mostrar parâmetros dos modelos não-lineares
+    # Mostrar parâmetros dos modelos não-lineares
     if config.get('incluir_nao_lineares', True):
         mostrar_parametros_nao_lineares(config)
 
@@ -106,7 +111,7 @@ def mostrar_configuracao_aplicada():
 
 
 def mostrar_parametros_nao_lineares(config):
-    """NOVO: Mostra parâmetros dos modelos não-lineares configurados"""
+    """Mostra parâmetros dos modelos não-lineares configurados"""
     with st.expander("🔧 Parâmetros Iniciais dos Modelos Não-Lineares"):
         st.info("💡 Estes são os parâmetros iniciais configurados para os modelos não-lineares")
 
@@ -133,7 +138,7 @@ def mostrar_parametros_nao_lineares(config):
             st.write(f"• b = {mono.get('b', 1.00)}")
             st.write(f"• c = {mono.get('c', 0.10)}")
 
-        # NOVO: Validar parâmetros e mostrar avisos
+        # Validar parâmetros e mostrar avisos
         validacao = validar_parametros_configuracao(config)
         if validacao['avisos']:
             st.warning("⚠️ **Avisos sobre os parâmetros configurados:**")
@@ -201,7 +206,7 @@ def aplicar_preview_dados():
 
 
 def executar_analise_hipsometrica():
-    """Executa análise hipsométrica com configurações centralizadas - VERSÃO ADAPTADA"""
+    """Executa análise hipsométrica com configurações centralizadas"""
     st.header("🚀 Executando Análise Hipsométrica")
 
     # Aplicar filtros centralizados
@@ -211,10 +216,10 @@ def executar_analise_hipsometrica():
         st.error("❌ Dados insuficientes após filtros. Ajuste as configurações.")
         return
 
-    # NOVO: Obter configurações globais completas
+    # Obter configurações globais completas
     config = obter_configuracao_global()
 
-    # NOVO: Validar parâmetros antes de executar
+    # Validar parâmetros antes de executar
     validacao = validar_parametros_configuracao(config)
     if validacao['erros']:
         st.error("❌ Erro nas configurações dos parâmetros:")
@@ -238,7 +243,7 @@ def executar_analise_hipsometrica():
         status_text.text("🧮 Ajustando modelos com parâmetros configurados...")
         progress_bar.progress(0.3)
 
-        # NOVO: Chamar função COM configurações completas (incluindo parâmetros)
+        # Chamar função COM configurações completas (incluindo parâmetros)
         resultados, predicoes, melhor_modelo = ajustar_todos_modelos_hipsometricos(df_filtrado, config)
 
         progress_bar.progress(1.0)
@@ -260,7 +265,7 @@ def executar_analise_hipsometrica():
 
         st.success(f"🏆 Melhor modelo: **{melhor_modelo}**")
 
-        # NOVO: Mostrar informações sobre parâmetros utilizados
+        # Mostrar informações sobre parâmetros utilizados
         mostrar_info_parametros_utilizados(config, resultados)
 
         # Mostrar resultados
@@ -279,7 +284,7 @@ def executar_analise_hipsometrica():
 
 
 def mostrar_info_parametros_utilizados(config, resultados):
-    """NOVO: Mostra informações sobre parâmetros utilizados nos modelos"""
+    """Mostra informações sobre parâmetros utilizados nos modelos"""
     with st.expander("🔧 Parâmetros Utilizados nos Modelos"):
         st.info("💡 Informações sobre como as configurações foram aplicadas nos modelos")
 
@@ -320,7 +325,7 @@ def mostrar_info_parametros_utilizados(config, resultados):
                         r2 = resultados[modelo]['r2g']
                         st.write(f"• {modelo}: R² = {r2:.4f}")
 
-        # NOVO: Mostrar aviso se parâmetros podem não ter convergido bem
+        # Mostrar aviso se parâmetros podem não ter convergido bem
         if config.get('incluir_nao_lineares', True):
             modelos_nao_lineares_resultado = [m for m in resultados.keys() if
                                               m in ['Chapman', 'Weibull', 'Mononuclear']]
@@ -330,12 +335,7 @@ def mostrar_info_parametros_utilizados(config, resultados):
 
 
 def mostrar_resultados_hipsometricos(resultados, predicoes, df_dados, contexto="novo"):
-    """
-    Mostra resultados dos modelos hipsométricos - VERSÃO CORRIGIDA PARA KEYS
-
-    Args:
-        contexto: "novo" para execução atual, "salvo" para resultados salvos
-    """
+    """Mostra resultados dos modelos hipsométricos"""
     st.header("📊 Resultados dos Modelos Hipsométricos")
 
     # Adicionar identificador do contexto
@@ -418,7 +418,7 @@ def mostrar_coeficientes_modelos(resultados):
                         # Modelo não-linear
                         params = modelo_obj.parametros
 
-                        # NOVO: Mostrar parâmetros iniciais vs finais
+                        # Mostrar parâmetros iniciais vs finais
                         params_iniciais = modelo_obj.params_iniciais
 
                         st.write("**Parâmetros Iniciais vs Finais:**")
@@ -445,7 +445,7 @@ def mostrar_coeficientes_modelos(resultados):
 
 
 def get_parameter_name(modelo, index):
-    """NOVO: Retorna nomes dos parâmetros para cada modelo"""
+    """Retorna nomes dos parâmetros para cada modelo"""
     param_names = {
         'Chapman': ['b₀', 'b₁', 'b₂'],
         'Weibull': ['a', 'b', 'c'],
@@ -459,7 +459,7 @@ def get_parameter_name(modelo, index):
 
 
 def mostrar_downloads_hipsometricos(resultados, predicoes, df_dados, sufixo=""):
-    """Mostra opções de download - VERSÃO COM KEYS ÚNICAS"""
+    """Mostra opções de download"""
     st.subheader("💾 Downloads")
 
     # Ranking dos modelos
@@ -503,7 +503,7 @@ def mostrar_downloads_hipsometricos(resultados, predicoes, df_dados, sufixo=""):
         )
 
     with col3:
-        # NOVO: Relatório com parâmetros utilizados
+        # Relatório com parâmetros utilizados
         relatorio = gerar_relatorio_hipsometrico_com_parametros(resultados, df_ranking)
         st.download_button(
             "📄 Relatório com Parâmetros",
@@ -515,7 +515,7 @@ def mostrar_downloads_hipsometricos(resultados, predicoes, df_dados, sufixo=""):
 
 
 def gerar_relatorio_hipsometrico_com_parametros(resultados, df_ranking):
-    """NOVO: Gera relatório incluindo parâmetros utilizados"""
+    """Gera relatório incluindo parâmetros utilizados"""
     config = obter_configuracao_global()
     melhor = df_ranking.iloc[0]
 
@@ -587,7 +587,7 @@ def gerar_relatorio_hipsometrico_com_parametros(resultados, df_ranking):
 Use o modelo **{melhor['Modelo']}** para estimativas de altura neste povoamento.
 
 ---
-*Relatório gerado pelo Sistema de Inventário Florestal com Configurações Centralizadas*
+*Relatório gerado pelo GreenVista - Sistema de Inventário Florestal*
 *Parâmetros iniciais dos modelos não-lineares aplicados conforme configuração global*
 """
 
@@ -599,8 +599,11 @@ def main():
     if not verificar_prerequisitos():
         return
 
-    st.title("🌳 Modelos Hipsométricos")
-    st.markdown("### Análise da Relação Altura-Diâmetro com Parâmetros Configurados")
+    # Criar cabeçalho padronizado
+    criar_cabecalho_greenvista("Modelos Hipsométricos")
+
+    # Criar sidebar padronizada
+    criar_sidebar_melhorada()
 
     # Mostrar status da configuração na sidebar
     mostrar_status_configuracao_sidebar()
@@ -644,7 +647,7 @@ def main():
     if st.button("🚀 Executar Análise Hipsométrica", type="primary", use_container_width=True):
         executar_analise_hipsometrica()
 
-    # Mostrar resultados salvos se existirem - COM CONTROLE PARA EVITAR KEYS DUPLICADAS
+    # Mostrar resultados salvos se existirem
     if hasattr(st.session_state, 'resultados_hipsometricos') and st.session_state.resultados_hipsometricos:
         st.markdown("---")
         st.subheader("📂 Resultados Salvos")
@@ -673,6 +676,13 @@ def main():
                 resultados_salvos['dados'],
                 "salvo"  # CONTEXTO DIFERENTE PARA EVITAR CONFLITO DE KEYS
             )
+
+    # Navegação rápida final
+    st.markdown("---")
+    criar_navegacao_rapida_botoes()
+
+    # Mostrar alertas do sistema
+    mostrar_alertas_sistema()
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-# pages/4_🛩️_Dados_LiDAR.py - VERSÃO INTEGRADA
+# pages/4_🛩️_Dados_LiDAR.py - VERSÃO INTEGRADA COMPLETA
 """
 Etapa 4: Integração com Dados LiDAR - VERSÃO COMPLETA
 Página para integração e análise de dados LiDAR com inventário florestal
@@ -45,12 +45,15 @@ from config.config import MENSAGENS_AJUDA_LIDAR, CORES_LIDAR
 # Importar utilitários
 from utils.formatacao import formatar_brasileiro, formatar_numero_inteligente
 
-
-st.set_page_config(
-    page_title="Dados LiDAR",
-    page_icon="🛩️",
-    layout="wide"
+# Importar componentes de UI para manter identidade visual
+from ui.components import (
+    configurar_pagina_greenvista,
+    criar_cabecalho_greenvista,
+    criar_navegacao_rapida_botoes
 )
+
+# Configurar página com identidade visual
+configurar_pagina_greenvista("Dados LiDAR", "🛩️")
 
 
 def gerar_key_unica(base_key):
@@ -98,7 +101,6 @@ def verificar_prerequisitos():
 
 def mostrar_introducao_lidar():
     """Mostra introdução sobre integração LiDAR"""
-    st.title("🛩️ Integração com Dados LiDAR")
     st.markdown("### Análise Integrada: Campo + Sensoriamento Remoto")
 
     with st.expander("ℹ️ Sobre a Integração LiDAR"):
@@ -960,6 +962,9 @@ def limpar_dados_lidar():
 
 def main():
     """Função principal da página LiDAR integrada"""
+    # Criar cabeçalho com identidade visual
+    criar_cabecalho_greenvista("Dados LiDAR")
+
     # Verificar pré-requisitos
     if not verificar_prerequisitos():
         return
@@ -1046,6 +1051,10 @@ def main():
         st.markdown("---")
         if st.button("🗑️ Limpar Dados LiDAR", type="secondary", help="Remove todos os dados LiDAR salvos"):
             limpar_dados_lidar()
+
+    # Navegação rápida
+    st.markdown("---")
+    criar_navegacao_rapida_botoes()
 
 
 if __name__ == "__main__":

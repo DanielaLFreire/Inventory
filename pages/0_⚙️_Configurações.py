@@ -1,11 +1,7 @@
-# pages/0_⚙️_Configurações.py - VERSÃO CORRIGIDA
+# pages/0_⚙️_Configurações.py - VERSÃO PADRONIZADA
 """
-Página de Configurações Globais - CORRIGIDA
+Página de Configurações Globais - COM IDENTIDADE VISUAL PADRONIZADA
 Centraliza todas as configurações do sistema em um local único
-CORREÇÕES:
-1. Removida aba de debug desnecessária
-2. Removida aba duplicada de parâmetros não-lineares
-3. Corrigido problema do shapefile não aparecer na lista
 """
 
 import streamlit as st
@@ -16,11 +12,96 @@ from config.configuracoes_globais import (
     verificar_configuracao_atualizada
 )
 
-st.set_page_config(
-    page_title="Configurações Globais",
-    page_icon="⚙️",
-    layout="wide"
+# Importar componentes visuais padronizados
+from ui.components import (
+    configurar_pagina_greenvista,
+    criar_cabecalho_greenvista,
+    criar_navegacao_rapida_botoes,
+    mostrar_alertas_sistema
 )
+from ui.sidebar import criar_sidebar_melhorada
+
+# Configurar página com identidade visual
+configurar_pagina_greenvista("Configurações Globais", "⚙️")
+
+
+def mostrar_navegacao_rapida_header():
+    """Mostra navegação rápida no cabeçalho"""
+    st.markdown("### 🚀 Navegação Rápida")
+
+    config_atual = obter_configuracao_global()
+    configurado = config_atual.get('configurado', False)
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        st.markdown("""
+        **⚙️ Etapa 0 Configurações**
+
+        ✅ Ativa
+
+        *Configure filtros, áreas e parâmetros*
+        """)
+
+    with col2:
+        if configurado:
+            st.markdown("""
+            **🌳 Etapa 1 Hipsométricos**
+
+            ⚡ Disponível
+
+            *Modelos altura-diâmetro*
+            """)
+        else:
+            st.markdown("""
+            **🌳 Etapa 1 Hipsométricos**
+
+            ⏳ Configure primeiro
+
+            *Modelos altura-diâmetro*
+            """)
+
+    with col3:
+        if configurado:
+            st.markdown("""
+            **📊 Etapa 2 Volumétricos**
+
+            ⚡ Disponível  
+
+            *Cubagem e volume*
+            """)
+        else:
+            st.markdown("""
+            **📊 Etapa 2 Volumétricos**
+
+            ⏳ Configure primeiro
+
+            *Cubagem e volume*
+            """)
+
+    with col4:
+        if configurado:
+            st.markdown("""
+            **📈 Etapa 3 Inventário**
+
+            ⚡ Disponível
+
+            *Relatórios finais*
+            """)
+        else:
+            st.markdown("""
+            **📈 Etapa 3 Inventário**
+
+            ⏳ Configure primeiro
+
+            *Relatórios finais*
+            """)
+
+    # Progresso
+    progresso_texto = "Progresso: 0/4 etapas concluídas" if not configurado else "Progresso: 1/4 etapas concluídas"
+    st.caption(progresso_texto)
+
+    st.markdown("---")
 
 
 def verificar_dados_carregados():
@@ -44,8 +125,6 @@ def verificar_dados_carregados():
 
 def mostrar_introducao():
     """Mostra introdução sobre configurações centralizadas"""
-    st.title("🌲 Sistema de Inventário Florestal")
-
     st.markdown("""
     ### 🎯 **Central de Configurações**
 
@@ -134,7 +213,7 @@ def mostrar_aviso_impacto():
 
 def verificar_arquivos_opcionais():
     """
-    CORREÇÃO 3: Função dedicada para verificar arquivos opcionais de forma mais robusta
+    Função dedicada para verificar arquivos opcionais de forma mais robusta
 
     Returns:
         dict: Status dos arquivos opcionais
@@ -218,10 +297,10 @@ def mostrar_status_arquivos_opcionais():
                 st.caption("Upload na página principal para habilitar")
 
 
-def mostrar_navegacao_rapida():
-    """Navegação rápida para as etapas"""
+def mostrar_navegacao_final():
+    """Navegação final para as etapas"""
     st.markdown("---")
-    st.subheader("🚀 Navegação Rápida")
+    st.subheader("🚀 Navegação para Próximas Etapas")
 
     config_atual = obter_configuracao_global()
     configurado = config_atual.get('configurado', False)
@@ -255,8 +334,17 @@ def mostrar_navegacao_rapida():
 
 
 def main():
-    # Inicializar configurações globais se necessário
+    # Inicializar configurações globais
     inicializar_configuracoes_globais()
+
+    # Criar cabeçalho padronizado
+    criar_cabecalho_greenvista("Configurações Globais")
+
+    # Criar sidebar padronizada
+    criar_sidebar_melhorada()
+
+    # Mostrar navegação rápida
+    mostrar_navegacao_rapida_header()
 
     # Mostrar introdução
     mostrar_introducao()
@@ -268,7 +356,7 @@ def main():
     # Mostrar como configurações afetam etapas
     mostrar_impacto_configuracao()
 
-    # CORREÇÃO 3: Mostrar status dos arquivos opcionais
+    # Mostrar status dos arquivos opcionais
     mostrar_status_arquivos_opcionais()
 
     # Aviso sobre impacto das mudanças
@@ -278,8 +366,8 @@ def main():
     st.markdown("---")
     configuracoes = mostrar_configuracoes_globais()
 
-    # Navegação rápida
-    mostrar_navegacao_rapida()
+    # Navegação final
+    mostrar_navegacao_final()
 
     # Informações adicionais
     with st.expander("ℹ️ Informações Importantes"):
@@ -318,6 +406,13 @@ def main():
         - **Coordenadas**: Carregue na página principal para habilitar método "Coordenadas das parcelas"
         - Estes arquivos ficam persistentes na sessão após o upload
         """)
+
+    # Navegação rápida final
+    st.markdown("---")
+    criar_navegacao_rapida_botoes()
+
+    # Mostrar alertas do sistema
+    mostrar_alertas_sistema()
 
 
 if __name__ == "__main__":
