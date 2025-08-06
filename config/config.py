@@ -7,7 +7,7 @@ NOVO: Suporte para integração com dados LiDAR
 # Configurações da página Streamlit
 PAGE_CONFIG = {
     'page_title': "Sistema Integrado de Inventário Florestal",
-    'page_icon': "🌲",
+    'page_icon': "./imagens/logo.png",
     'layout': "wide",
     'initial_sidebar_state': "expanded"
 }

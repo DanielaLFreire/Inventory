@@ -41,7 +41,7 @@ from ui.components import (
 from ui.sidebar import criar_sidebar_melhorada
 
 # Configurar página com identidade visual
-configurar_pagina_greenvista("Modelos Volumétricos", "📊")
+configurar_pagina_greenvista("Modelos Volumétricos", "./images/logo.png")
 
 
 def gerar_key_unica(base_key):

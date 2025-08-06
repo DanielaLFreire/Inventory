@@ -21,7 +21,7 @@ from ui.components import (
 from ui.sidebar import criar_sidebar_melhorada
 
 # Configurar página com identidade visual
-configurar_pagina_greenvista("Configurações Globais", "⚙️")
+configurar_pagina_greenvista("Configurações Globais", "./images/logo.png")
 
 
 def verificar_dados_carregados():

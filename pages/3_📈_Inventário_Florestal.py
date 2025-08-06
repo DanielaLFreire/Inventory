@@ -33,7 +33,7 @@ from ui.components import (
 )
 
 # Configurar página com identidade visual
-configurar_pagina_greenvista("Inventário Florestal", "📈")
+configurar_pagina_greenvista("Inventário Florestal", "./images/logo.png")
 
 
 def gerar_key_unica(base_key):

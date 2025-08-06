@@ -45,7 +45,7 @@ except ImportError:
 
 
 # Configurar página
-configurar_pagina_greenvista("Página Principal", "🌲")
+configurar_pagina_greenvista("Página Principal", "./images/logo.png")
 
 
 def verificar_disponibilidade_las():
