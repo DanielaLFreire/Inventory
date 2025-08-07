@@ -20,8 +20,8 @@ from ui.components import (
     criar_cabecalho_greenvista,
     criar_navegacao_rapida_botoes,
     criar_secao_instrucoes,
-    mostrar_alertas_sistema
-)
+    mostrar_alertas_sistema,
+    mostrar_empresa)
 
 # Importar processadores CORRIGIDOS
 from utils.arquivo_handler import carregar_arquivo_seguro
@@ -638,8 +638,8 @@ def mostrar_preview_dados_lidar():
     # Mostrar botão de acesso ao LiDAR se há dados
     if dados_lidar_encontrados:
         st.info("🛩️ **Dados LiDAR disponíveis!** Acesse a Etapa 4 para análise completa.")
-        if st.button("🚀 Ir para Etapa 4 - LiDAR", type="primary"):
-            st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
+        #if st.button("🚀 Ir para Etapa 4 - LiDAR", type="primary"):
+        #    st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
 
 
 def mostrar_status_sistema():
@@ -655,35 +655,35 @@ def mostrar_status_sistema():
 
         with col1:
             if status['dados_inventario'] and status['dados_cubagem']:
-                st.success("✅ **Dados**\nCarregados")
+                st.success("✅ **Dados Necessários**\nCarregados")
             elif status['dados_inventario'] or status['dados_cubagem']:
-                st.warning("⚠️ **Dados**\nIncompletos")
+                st.warning("⚠️ **Dados Necessários**\nIncompletos")
             else:
                 st.error("❌ **Dados**\nFaltantes")
 
         with col2:
             if status['configurado']:
-                st.success("✅ **Config**\nOK")
+                st.success("✅ **Configuração**\nOK")
             else:
-                st.error("❌ **Config**\nNecessária")
+                st.error("❌ **Configuração**\nNecessária")
 
         with col3:
             if status['hip_executado']:
-                st.success("✅ **Etapa 1**\nConcluída")
+                st.success("✅ **Hipsométricos**\nConcluída")
             else:
-                st.info("⏳ **Etapa 1**\nPendente")
+                st.info("⏳ **Hipsométricos**\nPendente")
 
         with col4:
             if status['vol_executado']:
-                st.success("✅ **Etapa 2**\nConcluída")
+                st.success("✅ **Volumétricos**\nConcluída")
             else:
-                st.info("⏳ **Etapa 2**\nPendente")
+                st.info("⏳ **Volumétricos**\nPendente")
 
         with col5:
             if status['inv_executado']:
-                st.success("✅ **Etapa 3**\nConcluída")
+                st.success("✅ **Inventário**\nConcluída")
             else:
-                st.info("⏳ **Etapa 3**\nPendente")
+                st.info("⏳ **Inventário**\nPendente")
 
         # === LINHA 2: DADOS LIDAR ===
         st.markdown("#### 🛩️ Status LiDAR")
@@ -728,305 +728,8 @@ def mostrar_status_sistema():
             st.progress(status['progresso_completo'],
                         text=f"Progresso Completo: {status['progresso_completo'] * 100:.0f}% (inclui LiDAR)")
 
-        # Status dos arquivos opcionais
-        mostrar_status_arquivos_opcionais(status)
-
     except Exception as e:
         st.error(f"❌ Erro ao mostrar status do sistema: {e}")
-
-
-def mostrar_status_arquivos_opcionais(status):
-    """Mostra status dos arquivos opcionais incluindo LiDAR"""
-    try:
-        st.subheader("📁 Arquivos Opcionais")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # Shapefile
-            if status['shapefile_disponivel']:
-                st.success("✅ **Shapefile**\nCarregado")
-                try:
-                    nome_arquivo = getattr(st.session_state.arquivo_shapefile, 'name', 'shapefile.zip')
-                    st.caption(f"📄 {nome_arquivo}")
-                except Exception:
-                    st.caption("📄 Shapefile disponível")
-                st.info("🗺️ Método 'Upload shapefile' disponível nas configurações")
-            else:
-                st.warning("⚠️ **Shapefile**\nNão carregado")
-                st.caption("Upload na sidebar para habilitar método avançado de área")
-
-        with col2:
-            # Coordenadas
-            if status['coordenadas_disponiveis']:
-                st.success("✅ **Coordenadas**\nCarregadas")
-                try:
-                    nome_arquivo = getattr(st.session_state.arquivo_coordenadas, 'name', 'coordenadas.csv')
-                    st.caption(f"📄 {nome_arquivo}")
-                except Exception:
-                    st.caption("📄 Coordenadas disponíveis")
-                st.info("📍 Método 'Coordenadas das parcelas' disponível nas configurações")
-            else:
-                st.warning("⚠️ **Coordenadas**\nNão carregadas")
-                st.caption("Upload na sidebar para habilitar método avançado de área")
-
-        # === SEÇÃO LIDAR DETALHADA ===
-        dados_lidar_disponiveis = (status['arquivo_las_disponivel'] or
-                                   status['metricas_lidar_disponivel'] or
-                                   status['dados_lidar_processados'] or
-                                   status['dados_lidar_integrados'])
-
-        if dados_lidar_disponiveis:
-            st.subheader("🛩️ Detalhes LiDAR")
-
-            with st.expander("📊 Status Detalhado LiDAR", expanded=True):
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.markdown("**📁 Arquivos Disponíveis:**")
-
-                    if status['arquivo_las_disponivel']:
-                        st.success("✅ Arquivo LAS/LAZ carregado")
-                        try:
-                            arquivo_las = st.session_state.arquivo_las
-                            nome = getattr(arquivo_las, 'name', 'arquivo.las')
-                            tamanho = getattr(arquivo_las, 'size', 0) / (1024 * 1024)
-                            st.caption(f"📄 {nome} ({tamanho:.1f} MB)")
-                        except:
-                            st.caption("📄 Arquivo LAS disponível")
-
-                    if status['metricas_lidar_disponivel']:
-                        st.success("✅ Métricas LiDAR carregadas")
-                        try:
-                            arquivo_metricas = st.session_state.arquivo_metricas_lidar
-                            nome = getattr(arquivo_metricas, 'name', 'metricas.csv')
-                            st.caption(f"📄 {nome}")
-                        except:
-                            st.caption("📄 Métricas disponíveis")
-
-                with col2:
-                    st.markdown("**🔄 Processamento:**")
-
-                    if status['dados_lidar_processados']:
-                        st.success("✅ LAS processado")
-                        try:
-                            dados_las = st.session_state.dados_lidar_las
-                            if 'df_metricas' in dados_las:
-                                n_parcelas = len(dados_las['df_metricas'])
-                                st.caption(f"📊 {n_parcelas} parcelas processadas")
-                        except:
-                            st.caption("📊 Métricas extraídas")
-
-                    if status['dados_lidar_integrados']:
-                        st.success("✅ LiDAR integrado")
-                        try:
-                            dados_lidar = st.session_state.dados_lidar
-                            if 'stats_comparacao' in dados_lidar:
-                                stats = dados_lidar['stats_comparacao']
-                                correlacao = stats.get('correlacao', 0)
-                                st.caption(f"🔗 Correlação: {correlacao:.3f}")
-                        except:
-                            st.caption("🔗 Integração concluída")
-
-                # Ações disponíveis para LiDAR
-                st.markdown("**⚡ Ações Disponíveis:**")
-                col1, col2, col3 = st.columns(3)
-
-                with col1:
-                    if status['arquivo_las_disponivel'] and not status['dados_lidar_processados']:
-                        if st.button("🛩️ Processar LAS", key="processar_las_status"):
-                            st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
-
-                with col2:
-                    if (status['metricas_lidar_disponivel'] or status['dados_lidar_processados']) and not status[
-                        'dados_lidar_integrados']:
-                        if st.button("🔗 Integrar LiDAR", key="integrar_lidar_status"):
-                            st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
-
-                with col3:
-                    if status['dados_lidar_integrados']:
-                        if st.button("📊 Ver Análise", key="ver_analise_lidar"):
-                            st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
-
-    except Exception as e:
-        st.error(f"❌ Erro ao mostrar status dos arquivos opcionais: {e}")
-
-
-def mostrar_proximos_passos():
-    """Mostra próximos passos recomendados incluindo LiDAR"""
-    try:
-        st.subheader("🚀 Próximos Passos")
-
-        # Obter status do sistema
-        status = obter_status_sistema_completo()
-
-        if not (status['dados_inventario'] and status['dados_cubagem']):
-            st.info("1️⃣ **Carregue os dados** - Upload dos arquivos de inventário e cubagem na sidebar")
-
-            # Verificar disponibilidade LAS
-            las_disponivel, _ = verificar_disponibilidade_las()
-            if las_disponivel:
-                st.info("💡 **OPCIONAL:** Carregue também dados LiDAR (.las/.laz ou métricas CSV) para análise avançada")
-
-        elif not status['configurado']:
-            st.info("2️⃣ **Configure o sistema** - Defina filtros e parâmetros na Etapa 0")
-            if st.button("⚙️ Ir para Configurações", type="primary"):
-                st.switch_page("pages/0_⚙️_Configurações.py")
-
-        else:
-            st.success("✅ **Sistema pronto!** Execute as etapas de análise:")
-
-            # Botões para etapas principais
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                button_style = "primary" if not status['hip_executado'] else "secondary"
-                if st.button("🌳 Etapa 1\nModelos Hipsométricos", use_container_width=True, type=button_style):
-                    st.switch_page("pages/1_🌳_Modelos_Hipsométricos.py")
-
-            with col2:
-                button_style = "primary" if status['hip_executado'] and not status['vol_executado'] else "secondary"
-                if st.button("📊 Etapa 2\nModelos Volumétricos", use_container_width=True, type=button_style):
-                    st.switch_page("pages/2_📊_Modelos_Volumétricos.py")
-
-            with col3:
-                button_style = "primary" if status['vol_executado'] and not status['inv_executado'] else "secondary"
-                if st.button("📈 Etapa 3\nInventário Final", use_container_width=True, type=button_style):
-                    st.switch_page("pages/3_📈_Inventário_Florestal.py")
-
-            # === ETAPA LIDAR (OPCIONAL) ===
-            dados_lidar_disponiveis = (status['arquivo_las_disponivel'] or
-                                       status['metricas_lidar_disponivel'] or
-                                       status['dados_lidar_processados'] or
-                                       status['dados_lidar_integrados'])
-
-            if dados_lidar_disponiveis:
-                st.markdown("---")
-                st.info("🛩️ **ETAPA OPCIONAL:** Dados LiDAR detectados!")
-
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    # Determinar texto e estilo do botão LiDAR
-                    if not status['dados_lidar_processados'] and status['arquivo_las_disponivel']:
-                        texto_botao = "🛩️ Processar LAS/LAZ"
-                        button_style = "primary"
-                    elif not status['dados_lidar_integrados'] and (
-                            status['metricas_lidar_disponivel'] or status['dados_lidar_processados']):
-                        texto_botao = "🔗 Integrar LiDAR"
-                        button_style = "primary"
-                    else:
-                        texto_botao = "📊 Análise LiDAR"
-                        button_style = "secondary"
-
-                    if st.button(texto_botao, use_container_width=True, type=button_style):
-                        st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
-
-                with col2:
-                    # Mostrar benefícios do LiDAR
-                    st.markdown("""
-                    **🎯 Benefícios LiDAR:**
-                    - Validação de modelos
-                    - Calibração automática  
-                    - Mapeamento estrutural
-                    - Detecção de outliers
-                    """)
-
-            elif status['inv_executado']:
-                # Sistema completo sem LiDAR
-                st.markdown("---")
-                st.success("🎉 **Análise completa!** Todos os modelos executados.")
-
-                # Sugestão para LiDAR
-                las_disponivel, _ = verificar_disponibilidade_las()
-                if las_disponivel:
-                    st.info(
-                        "💡 **Dica:** Carregue dados LiDAR na sidebar para análise avançada e validação dos modelos!")
-
-    except Exception as e:
-        st.error(f"❌ Erro ao mostrar próximos passos: {e}")
-
-
-def mostrar_informacoes_sistema_lidar():
-    """Mostra informações específicas sobre o sistema LiDAR"""
-    try:
-        las_disponivel, erros = verificar_disponibilidade_las()
-
-        st.subheader("🛩️ Sistema LiDAR")
-
-        if las_disponivel:
-            st.success("✅ Processamento LAS/LAZ disponível!")
-
-            with st.expander("ℹ️ Capacidades LiDAR"):
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.markdown("""
-                    **📁 Formatos Suportados:**
-                    - Arquivos .LAS (padrão)
-                    - Arquivos .LAZ (comprimido)
-                    - Métricas CSV/Excel pré-processadas
-                    - Máximo 500MB por arquivo
-
-                    **🔧 Processamento:**
-                    - Chunks automáticos
-                    - Gestão de memória
-                    - Validação em tempo real
-                    """)
-
-                with col2:
-                    st.markdown("""
-                    **📊 Métricas Calculadas:**
-                    - Alturas (média, máxima, percentis)
-                    - Variabilidade estrutural
-                    - Densidade de pontos
-                    - Cobertura do dossel
-                    - Complexidade estrutural
-                    - Intensidade (se disponível)
-                    """)
-        else:
-            st.warning("⚠️ Processamento LAS/LAZ não disponível")
-
-            if erros:
-                st.error("❌ Problemas detectados:")
-                for erro in erros:
-                    st.error(f"• {erro}")
-
-            with st.expander("📦 Instruções de Instalação"):
-                st.markdown("""
-                **Para habilitar processamento LAS/LAZ, instale:**
-
-                ```bash
-                pip install laspy[lazrs,laszip]
-                pip install geopandas
-                pip install shapely
-                pip install scipy
-                ```
-
-                **Após instalação:**
-                1. Reinicie o Streamlit
-                2. Recarregue esta página
-                3. Upload de arquivos LAS estará disponível
-                """)
-
-                # Verificar dependências específicas
-                st.markdown("**Verificação de Dependências:**")
-                dependencias = {
-                    'laspy': 'Leitura de arquivos LAS/LAZ',
-                    'geopandas': 'Operações geoespaciais',
-                    'shapely': 'Geometrias e parcelas',
-                    'scipy': 'Estatísticas avançadas'
-                }
-
-                for dep, descricao in dependencias.items():
-                    try:
-                        __import__(dep)
-                        st.success(f"✅ {dep}: {descricao}")
-                    except ImportError:
-                        st.error(f"❌ {dep}: {descricao} - **FALTANTE**")
-
-    except Exception as e:
-        st.error(f"❌ Erro ao verificar sistema LiDAR: {e}")
 
 
 def main():
@@ -1055,30 +758,24 @@ def main():
                 st.session_state.dados_cubagem = dados_cubagem
 
         # === SEÇÃO PRINCIPAL DA PÁGINA ===
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "📊 Status do Sistema",
-            "👀 Preview dos Dados",
-            "🛩️ Sistema LiDAR",
+        tab1, tab2, tab3, tab4 = st.tabs([
             "📋 Instruções",
-            "⚠️ Alertas"
+            "📊 Status do Sistema",
+            "⚠️ Alertas",
+            "👨🏻‍💻 Quem somos"
         ])
 
         with tab1:
-            mostrar_status_sistema()
-            st.markdown("---")
-            mostrar_proximos_passos()
-
-        with tab2:
-            mostrar_preview_dados_carregados()
-
-        with tab3:
-            mostrar_informacoes_sistema_lidar()
-
-        with tab4:
             criar_secao_instrucoes()
 
-        with tab5:
+        with tab2:
+            mostrar_status_sistema()
+
+        with tab3:
             mostrar_alertas_sistema()
+
+        with tab4:
+            mostrar_empresa()
 
         # Navegação rápida
         st.markdown("---")

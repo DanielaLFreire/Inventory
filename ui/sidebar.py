@@ -1,7 +1,9 @@
-# ui/sidebar.py - VERSÃO COMPLETA COM LAS/LAZ
+# ui/sidebar.py - VERSÃO HÍBRIDA LIMPA E COMPLETA
 '''
-Interface da barra lateral para upload de arquivos - Versão completa
-INCLUI: Upload LAS/LAZ, persistência de sessão, processamento automático
+Interface da barra lateral para upload de arquivos - Versão híbrida
+MANTÉM: Todas as funcionalidades atuais
+ADICIONA: Nova estrutura Core + Extras para LiDAR
+LIMPO: Remove debugs e código desnecessário
 '''
 
 import streamlit as st
@@ -18,7 +20,6 @@ try:
         ProcessadorLASIntegrado,
         integrar_com_pagina_lidar
     )
-
     PROCESSAMENTO_LAS_DISPONIVEL = True
 except ImportError:
     PROCESSAMENTO_LAS_DISPONIVEL = False
@@ -39,7 +40,7 @@ def verificar_disponibilidade_las():
 
 def processar_dados_inventario_sidebar(arquivo_inventario):
     """
-    Processa dados do inventário com persistência garantida - VERSÃO CORRIGIDA
+    Processa dados do inventário com persistência garantida
     """
     try:
         if arquivo_inventario is None:
@@ -69,23 +70,23 @@ def processar_dados_inventario_sidebar(arquivo_inventario):
             st.sidebar.error("❌ Sem dados válidos")
             return None
 
-        # CORREÇÃO PRINCIPAL: Salvar de forma mais robusta
+        # Salvar de forma robusta
         try:
-            # 1. Fazer cópia profunda
+            # Fazer cópia profunda
             df_para_salvar = df_limpo.copy(deep=True)
 
-            # 2. Limpar dados anteriores
+            # Limpar dados anteriores
             if hasattr(st.session_state, 'dados_inventario'):
                 del st.session_state.dados_inventario
 
-            # 3. Salvar dados principais
+            # Salvar dados principais
             st.session_state.dados_inventario = df_para_salvar
 
-            # 4. Salvar flags de controle
+            # Salvar flags de controle
             st.session_state.arquivos_carregados = True
             st.session_state.timestamp_carregamento_inventario = pd.Timestamp.now()
 
-            # 5. VERIFICAR SE SALVAMENTO FOI BEM-SUCEDIDO
+            # Verificar se salvamento foi bem-sucedido
             if (hasattr(st.session_state, 'dados_inventario') and
                     st.session_state.dados_inventario is not None and
                     len(st.session_state.dados_inventario) == len(df_limpo)):
@@ -107,14 +108,12 @@ def processar_dados_inventario_sidebar(arquivo_inventario):
 
     except Exception as e:
         st.sidebar.error(f"❌ Erro: {str(e)[:50]}...")
-        if st.sidebar.button("🔍 Debug", key="debug_inventario"):
-            st.sidebar.code(str(e))
         return None
 
 
 def processar_dados_cubagem_sidebar(arquivo_cubagem):
     """
-    Processa dados de cubagem com persistência garantida - VERSÃO CORRIGIDA
+    Processa dados de cubagem com persistência garantida
     """
     try:
         if arquivo_cubagem is None:
@@ -144,23 +143,23 @@ def processar_dados_cubagem_sidebar(arquivo_cubagem):
             st.sidebar.error("❌ Sem dados válidos")
             return None
 
-        # CORREÇÃO: Salvar de forma mais robusta
+        # Salvar de forma robusta
         try:
-            # 1. Fazer cópia profunda
+            # Fazer cópia profunda
             df_para_salvar = df_limpo.copy(deep=True)
 
-            # 2. Limpar dados anteriores
+            # Limpar dados anteriores
             if hasattr(st.session_state, 'dados_cubagem'):
                 del st.session_state.dados_cubagem
 
-            # 3. Salvar dados principais
+            # Salvar dados principais
             st.session_state.dados_cubagem = df_para_salvar
 
-            # 4. Salvar flags de controle
+            # Salvar flags de controle
             st.session_state.cubagem_carregada = True
             st.session_state.timestamp_carregamento_cubagem = pd.Timestamp.now()
 
-            # 5. VERIFICAR SALVAMENTO
+            # Verificar salvamento
             if (hasattr(st.session_state, 'dados_cubagem') and
                     st.session_state.dados_cubagem is not None and
                     len(st.session_state.dados_cubagem) == len(df_limpo)):
@@ -182,20 +181,12 @@ def processar_dados_cubagem_sidebar(arquivo_cubagem):
 
     except Exception as e:
         st.sidebar.error(f"❌ Erro: {str(e)[:50]}...")
-        if st.sidebar.button("🔍 Debug", key="debug_cubagem"):
-            st.sidebar.code(str(e))
         return None
 
 
 def processar_arquivo_las_sidebar(arquivo_las):
     """
     Processa arquivo LAS/LAZ na sidebar (preview apenas)
-
-    Args:
-        arquivo_las: Arquivo LAS/LAZ carregado
-
-    Returns:
-        bool: True se arquivo foi validado
     """
     try:
         if arquivo_las is None:
@@ -330,9 +321,6 @@ def criar_sidebar():
     '''
     Cria a interface da barra lateral com uploads e processamento automático
     VERSÃO COMPLETA: Inclui upload LAS/LAZ com persistência
-
-    Returns:
-        dict: Dicionário com os arquivos carregados e processados
     '''
     st.sidebar.header("📁 Upload de Dados")
 
@@ -388,7 +376,7 @@ def criar_sidebar():
             st.sidebar.caption(f"📄 {arquivo_las_ativo.name}")
 
             # Botão para limpar arquivo LAS
-            if st.sidebar.button("🗑️ Remover LAS", key="remove_las"):
+            if st.sidebar.button("🗑️ Remover LAS", key="remove_las", type="secondary"):
                 delattr(st.session_state, 'arquivo_las')
                 st.sidebar.success("🗑️ Arquivo LAS removido!")
                 st.rerun()
@@ -398,7 +386,7 @@ def criar_sidebar():
     else:
         st.sidebar.warning("⚠️ Processamento LAS indisponível")
         st.sidebar.caption("Instale: pip install laspy geopandas")
-        if st.sidebar.button("📋 Ver Instruções", key="instrucoes_las"):
+        if st.sidebar.button("📋 Ver Instruções", key="instrucoes_las", type="secondary"):
             with st.sidebar.expander("📦 Instalação LAS", expanded=True):
                 st.code("""
 pip install laspy[lazrs,laszip]
@@ -474,18 +462,11 @@ pip install scipy
     if arquivo_inventario is not None:
         with st.sidebar.expander("🔄 Processando Inventário..."):
             dados_processados['inventario'] = processar_dados_inventario_sidebar(arquivo_inventario)
-            # REMOVER esta linha - o salvamento já é feito dentro da função
-            # if dados_processados['inventario'] is not None:
-            #     st.session_state.dados_inventario = dados_processados['inventario']
-
 
     # Processar cubagem se carregada
     if arquivo_cubagem is not None:
         with st.sidebar.expander("🔄 Processando Cubagem..."):
             dados_processados['cubagem'] = processar_dados_cubagem_sidebar(arquivo_cubagem)
-            # REMOVER esta linha - o salvamento já é feito dentro da função
-            # if dados_processados['cubagem'] is not None:
-            #     st.session_state.dados_cubagem = dados_processados['cubagem']
 
     # Mostrar status dos arquivos
     mostrar_status_arquivos_completo(dados_processados)
@@ -493,7 +474,7 @@ pip install scipy
     # Mostrar status das configurações globais na sidebar
     mostrar_status_configuracao_sidebar()
 
-    # Mostrar progresso das etapas na sidebar
+    # Mostrar progresso das etapas na sidebar (NOVA VERSÃO CORE + EXTRAS)
     mostrar_progresso_etapas_sidebar()
 
     # Mostrar informações adicionais e ações rápidas
@@ -517,9 +498,6 @@ pip install scipy
             st.sidebar.info("✅ Inventário persistiu - falta cubagem")
         elif cubagem_ok:
             st.sidebar.info("✅ Cubagem persistiu - falta inventário")
-        else:
-            st.sidebar.warning("⚠️ Problemas na persistência detectados")
-            st.sidebar.caption("Use debug para investigar")
 
     return dados_processados
 
@@ -536,7 +514,6 @@ def mostrar_status_arquivos_completo(arquivos):
     # Inventário
     if arquivos['inventario'] is not None:
         st.sidebar.success("✅ Inventário processado")
-
         df_inv = arquivos['inventario']
         st.sidebar.info(f"📊 {len(df_inv):,} registros")
         st.sidebar.info(f"🌳 {df_inv['talhao'].nunique()} talhões")
@@ -550,96 +527,59 @@ def mostrar_status_arquivos_completo(arquivos):
         except Exception:
             st.sidebar.caption("Estatísticas indisponíveis")
 
-
     elif hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
-
         st.sidebar.success("✅ Inventário persistido")
-
         try:
-
             df_inv = st.session_state.dados_inventario
-
             if isinstance(df_inv, pd.DataFrame) and len(df_inv) > 0:
-
                 st.sidebar.caption(f"📊 {len(df_inv):,} registros")
-
                 st.sidebar.caption(f"🌳 {df_inv['talhao'].nunique()} talhões")
 
                 # Mostrar timestamp se disponível
-
                 if hasattr(st.session_state, 'timestamp_carregamento_inventario'):
-
                     timestamp = st.session_state.timestamp_carregamento_inventario
-
                     tempo_decorrido = pd.Timestamp.now() - timestamp
-
                     if tempo_decorrido.total_seconds() < 3600:  # Menos de 1 hora
-
                         minutos = int(tempo_decorrido.total_seconds() / 60)
-
                         st.sidebar.caption(f"⏰ Há {minutos} min")
-
             else:
-
                 st.sidebar.warning("⚠️ Inventário existe mas inválido")
-
         except Exception as e:
-
             st.sidebar.error(f"❌ Erro no inventário: {str(e)[:20]}...")
-
     else:
         st.sidebar.error("❌ Inventário necessário")
 
     # Cubagem
     if arquivos['cubagem'] is not None:
         st.sidebar.success("✅ Cubagem processada")
-
         df_cub = arquivos['cubagem']
         try:
             arvores = df_cub['arv'].nunique()
             secoes_media = df_cub.groupby(['talhao', 'arv']).size().mean()
-
             st.sidebar.info(f"📏 {arvores} árvores")
             st.sidebar.caption(f"Seções/árvore: {formatar_brasileiro(secoes_media, 1)}")
         except Exception:
             st.sidebar.info(f"📏 Dados processados")
 
-
     elif hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
-
         st.sidebar.success("✅ Cubagem persistida")
-
         try:
-
             df_cub = st.session_state.dados_cubagem
-
             if isinstance(df_cub, pd.DataFrame) and len(df_cub) > 0:
-
                 arvores = df_cub['arv'].nunique()
-
                 st.sidebar.caption(f"📏 {arvores} árvores")
-
                 st.sidebar.caption(f"📊 {len(df_cub):,} seções")
 
                 # Mostrar timestamp se disponível
-
                 if hasattr(st.session_state, 'timestamp_carregamento_cubagem'):
-
                     timestamp = st.session_state.timestamp_carregamento_cubagem
-
                     tempo_decorrido = pd.Timestamp.now() - timestamp
-
                     if tempo_decorrido.total_seconds() < 3600:
                         minutos = int(tempo_decorrido.total_seconds() / 60)
-
                         st.sidebar.caption(f"⏰ Há {minutos} min")
-
             else:
-
                 st.sidebar.warning("⚠️ Cubagem existe mas inválida")
-
         except Exception as e:
-
             st.sidebar.error(f"❌ Erro na cubagem: {str(e)[:20]}...")
     else:
         st.sidebar.error("❌ Cubagem necessária")
@@ -761,7 +701,7 @@ def mostrar_status_configuracao_sidebar():
             st.sidebar.warning("⚠️ Sistema Não Configurado")
             st.sidebar.caption("Configure na Etapa 0 primeiro")
 
-            if st.sidebar.button("⚙️ Ir para Configurações", use_container_width=True, key="btn_config_sidebar"):
+            if st.sidebar.button("⚙️ Ir para Configurações", use_container_width=True, key="btn_config_sidebar", type="primary"):
                 st.switch_page("pages/0_⚙️_Configurações.py")
 
     except ImportError:
@@ -790,9 +730,9 @@ def verificar_parametros_customizados(config):
 
 
 def mostrar_progresso_etapas_sidebar():
-    '''Mostra o progresso das etapas na sidebar com melhorias'''
+    '''Mostra o progresso das etapas na sidebar - NOVA VERSÃO CORE + EXTRAS'''
     st.sidebar.markdown("---")
-    st.sidebar.subheader("🔄 Progresso das Etapas")
+    st.sidebar.subheader("🔄 Progresso do Sistema")
 
     # Verificar configurações primeiro
     config_status = False
@@ -803,6 +743,9 @@ def mostrar_progresso_etapas_sidebar():
     except:
         config_status = False
 
+    # === ETAPAS CORE (OBRIGATÓRIAS) ===
+    st.sidebar.markdown("**🎯 Etapas Principais:**")
+
     if config_status:
         st.sidebar.success("✅ **Etapa 0** - Configurado")
     else:
@@ -810,34 +753,18 @@ def mostrar_progresso_etapas_sidebar():
         st.sidebar.caption("Necessário para Etapas 1-3")
 
     # Verificar session states de forma segura
-    etapas_info = [
+    etapas_core_info = [
         ('resultados_hipsometricos', 'Etapa 1 - Hipsométricos', '🌳'),
         ('resultados_volumetricos', 'Etapa 2 - Volumétricos', '📊'),
-        ('inventario_processado', 'Etapa 3 - Inventário', '📈'),
-        (None, 'Etapa 4 - LiDAR', '🛩️')  # Etapa especial para LiDAR
+        ('inventario_processado', 'Etapa 3 - Inventário', '📈')
     ]
 
     etapas_concluidas = 0
+    if config_status:
+        etapas_concluidas += 1
 
-    for state_key, nome_etapa, icone in etapas_info:
+    for state_key, nome_etapa, icone in etapas_core_info:
         try:
-            if state_key is None:  # Etapa LiDAR
-                # Verificar se há dados LiDAR processados
-                lidar_las = hasattr(st.session_state,
-                                    'dados_lidar_las') and st.session_state.dados_lidar_las is not None
-                lidar_metrics = hasattr(st.session_state, 'dados_lidar') and st.session_state.dados_lidar is not None
-
-                if lidar_las or lidar_metrics:
-                    st.sidebar.success(f"✅ **{nome_etapa}**")
-                    if lidar_las:
-                        st.sidebar.caption("🛩️ Processamento LAS")
-                    if lidar_metrics:
-                        st.sidebar.caption("📊 Métricas processadas")
-                    etapas_concluidas += 0.5  # Conta como meia etapa (opcional)
-                else:
-                    st.sidebar.info(f"⏳ **{nome_etapa}** (Opcional)")
-                continue
-
             resultado = getattr(st.session_state, state_key, None)
 
             if resultado is not None:
@@ -877,16 +804,62 @@ def mostrar_progresso_etapas_sidebar():
         except Exception:
             st.sidebar.info(f"⏳ **{nome_etapa}**")
 
-    # Mostrar progresso geral
-    total_etapas = 3  # Não contar LiDAR como obrigatória
-    if etapas_concluidas > 0:
-        progresso = min(etapas_concluidas / total_etapas, 1.0)  # Máximo 100%
-        st.sidebar.progress(progresso, text=f"Progresso: {int(etapas_concluidas)}/{total_etapas} etapas")
+    # Progresso das etapas core
+    total_etapas_core = 4  # Configuração + 3 etapas principais
+    progresso_core = etapas_concluidas / total_etapas_core
 
-        if etapas_concluidas >= total_etapas:
-            st.sidebar.success("🎉 Análise Completa!")
-        elif etapas_concluidas >= 2:
-            st.sidebar.info("🚀 Quase lá! Falta 1 etapa")
+    st.sidebar.progress(progresso_core, text=f"Etapas Core: {etapas_concluidas}/{total_etapas_core}")
+
+    # === MÓDULOS EXTRAS (OPCIONAIS) ===
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("**🛩️ Módulos Adicionais:**")
+
+    # Verificar dados LiDAR
+    arquivo_las_disponivel = st.session_state.get('arquivo_las') is not None
+    metricas_lidar_disponiveis = st.session_state.get('arquivo_metricas_lidar') is not None
+    dados_lidar_processados = st.session_state.get('dados_lidar_las') is not None
+    dados_lidar_integrados = st.session_state.get('dados_lidar') is not None
+
+    # Status do módulo LiDAR
+    if dados_lidar_processados or dados_lidar_integrados:
+        st.sidebar.success("✅ **Análise LiDAR** - Concluída")
+
+        if dados_lidar_processados:
+            st.sidebar.caption("🛩️ Processamento LAS realizado")
+        if dados_lidar_integrados:
+            st.sidebar.caption("📊 Integração com inventário")
+
+        # Mostrar progresso extra
+        progresso_extra = min(progresso_core + 0.2, 1.0)  # Bônus de 20%
+        st.sidebar.progress(progresso_extra, text=f"Sistema Completo: {progresso_extra*100:.0f}%")
+
+    elif arquivo_las_disponivel or metricas_lidar_disponiveis:
+        st.sidebar.warning("⚠️ **Análise LiDAR** - Pendente")
+
+        if arquivo_las_disponivel:
+            arquivo_las = st.session_state.arquivo_las
+            st.sidebar.caption(f"🛩️ LAS: {arquivo_las.name}")
+        if metricas_lidar_disponiveis:
+            arquivo_metricas = st.session_state.arquivo_metricas_lidar
+            st.sidebar.caption(f"📊 Métricas: {arquivo_metricas.name}")
+
+        st.sidebar.caption("💡 Processe na Análise LiDAR")
+
+    else:
+        st.sidebar.info("⏳ **Análise LiDAR** - Opcional")
+        st.sidebar.caption("Carregue dados LiDAR na sidebar")
+
+    # === RESUMO FINAL ===
+    if progresso_core >= 1.0:
+        if dados_lidar_processados or dados_lidar_integrados:
+            st.sidebar.success("🎉 **Sistema Completo!**")
+            st.sidebar.caption("Core + LiDAR executados")
+        else:
+            st.sidebar.success("✅ **Core Completo!**")
+            st.sidebar.caption("LiDAR opcional disponível")
+    elif progresso_core >= 0.75:
+        st.sidebar.info("🚀 **Quase lá!**")
+        st.sidebar.caption("Falta pouco para concluir")
 
 
 def mostrar_informacoes_e_acoes_sidebar():
@@ -931,7 +904,7 @@ def mostrar_informacoes_e_acoes_sidebar():
         col1, col2 = st.sidebar.columns(2)
 
         with col1:
-            if st.button("🔄 Limpar", use_container_width=True, key="limpar_resultados_sidebar"):
+            if st.button("🔄 Limpar", use_container_width=True, key="limpar_resultados_sidebar", type="secondary"):
                 keys_para_limpar = [
                     'resultados_hipsometricos',
                     'resultados_volumetricos',
@@ -949,16 +922,16 @@ def mostrar_informacoes_e_acoes_sidebar():
                 st.rerun()
 
         with col2:
-            if st.button("📊 Relatório", use_container_width=True, key="gerar_relatorio_rapido_sidebar"):
+            if st.button("📊 Relatório", use_container_width=True, key="gerar_relatorio_rapido_sidebar", type="primary"):
                 st.switch_page("pages/3_📈_Inventário_Florestal.py")
 
         # Botão para LiDAR se há dados LAS
         if hasattr(st.session_state, 'arquivo_las') and st.session_state.arquivo_las is not None:
-            if st.sidebar.button("🛩️ Processar LAS", use_container_width=True, key="processar_las_sidebar"):
+            if st.sidebar.button("🛩️ Processar LAS", use_container_width=True, key="processar_las_sidebar", type="primary"):
                 st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
 
         # Botão para reconfigurar sistema
-        if st.sidebar.button("⚙️ Reconfigurar Sistema", use_container_width=True, key="reconfigurar_sistema_sidebar"):
+        if st.sidebar.button("⚙️ Reconfigurar Sistema", use_container_width=True, key="reconfigurar_sistema_sidebar", type="secondary"):
             st.switch_page("pages/0_⚙️_Configurações.py")
 
         # Download rápido se inventário foi processado
@@ -987,7 +960,7 @@ def mostrar_informacoes_e_acoes_sidebar():
 
 
 def mostrar_dicas_contextuais_sidebar():
-    '''Dicas contextuais baseadas no estado atual do sistema'''
+    '''Dicas contextuais baseadas no estado atual do sistema - VERSÃO ATUALIZADA'''
     st.sidebar.markdown("---")
 
     # Determinar contexto atual
@@ -999,8 +972,7 @@ def mostrar_dicas_contextuais_sidebar():
     # Verificar dados LiDAR
     dados_lidar = (
             (hasattr(st.session_state, 'arquivo_las') and st.session_state.arquivo_las is not None) or
-            (hasattr(st.session_state,
-                     'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None)
+            (hasattr(st.session_state, 'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None)
     )
 
     configurado = False
@@ -1012,47 +984,47 @@ def mostrar_dicas_contextuais_sidebar():
         pass
 
     # Verificar etapas executadas
-    hip_executado = hasattr(st.session_state,
-                            'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None
-    vol_executado = hasattr(st.session_state,
-                            'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None
-    inv_executado = hasattr(st.session_state,
-                            'inventario_processado') and st.session_state.inventario_processado is not None
+    hip_executado = hasattr(st.session_state, 'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None
+    vol_executado = hasattr(st.session_state, 'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None
+    inv_executado = hasattr(st.session_state, 'inventario_processado') and st.session_state.inventario_processado is not None
 
     # Dicas baseadas no contexto
     if not dados_carregados:
         st.sidebar.info('''
-        **🚀 Próximo Passo:**
-        1. Carregue Inventário e Cubagem
-        2. **OPCIONAL:** Carregue dados LiDAR
-        3. Configure o sistema (Etapa 0)
-        4. Execute as análises (Etapas 1-3)
+        **🚀 Próximos Passos:**
+        1. 📁 Carregue Inventário e Cubagem
+        2. 🛩️ **OPCIONAL:** Carregue dados LiDAR  
+        3. ⚙️ Configure sistema (Etapa 0)
+        4. 🔄 Execute etapas 1-3 em sequência
         ''')
     elif not configurado:
         st.sidebar.warning('''
         **⚙️ Configure o Sistema:**
-        Os dados estão carregados!
+        Dados carregados! 
 
-        **Na Etapa 0 você define:**
-        - Filtros de dados
-        - Parâmetros dos modelos
-        - Configurações de área
-        - Tolerâncias de ajuste
+        **Na Etapa 0 defina:**
+        - 🔍 Filtros de dados
+        - 📐 Parâmetros dos modelos
+        - 📏 Configurações de área
+        - ⚖️ Tolerâncias de ajuste
         ''')
     elif dados_lidar and not hip_executado:
         st.sidebar.success('''
         **🛩️ LiDAR Detectado:**
-        Execute primeiro as Etapas 1-3, depois use os dados LiDAR na Etapa 4 para:
+        Execute etapas 1-3 primeiro, depois:
+
+        **📊 Use LiDAR para:**
         - Validar modelos
-        - Calibrar equações
+        - Calibrar equações  
         - Mapear estrutura florestal
+        - Detectar inconsistências
         ''')
     elif not hip_executado and not vol_executado:
         st.sidebar.success('''
         **✅ Sistema Pronto:**
         Execute as Etapas 1, 2 e 3.
 
-        **Configurações aplicam automaticamente:**
+        **⚙️ Configurações aplicam automaticamente:**
         - Filtros globais
         - Parâmetros não-lineares
         - Validações automáticas
@@ -1060,25 +1032,29 @@ def mostrar_dicas_contextuais_sidebar():
     elif hip_executado and vol_executado and not inv_executado:
         st.sidebar.info('''
         **🎯 Finalize:**
-        Execute a Etapa 3 para gerar o inventário final com relatórios completos.
+        Execute a Etapa 3 para inventário final com relatórios completos.
         ''')
     elif inv_executado and dados_lidar:
         st.sidebar.success('''
-        **🎉 Análise Completa + LiDAR:**
+        **🎉 Core Completo + LiDAR:**
         Tudo pronto! Agora você pode:
-        - Usar Etapa 4 para dados LiDAR
+
+        **🛩️ Análise LiDAR:**
         - Validar com sensoriamento remoto
+        - Calibrar modelos automaticamente
         - Gerar relatórios integrados
         ''')
     elif inv_executado:
         st.sidebar.success('''
-        **🎉 Análise Completa:**
-        Todos os modelos foram executados!
+        **🎉 Análise Core Completa:**
+        Todos os modelos executados!
 
-        **Disponível:**
+        **📊 Disponível:**
         - Relatórios completos
-        - Downloads organizados
+        - Downloads organizados  
         - Gráficos detalhados
+
+        **💡 Opcional:** Carregue dados LiDAR para validação
         ''')
 
     # Informações sobre arquivos LiDAR
@@ -1093,30 +1069,29 @@ def mostrar_dicas_contextuais_sidebar():
                 - Análise estrutural avançada
                 ''')
 
-            if hasattr(st.session_state,
-                       'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None:
+            if hasattr(st.session_state, 'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None:
                 st.markdown('''
                 **📊 Métricas LiDAR:**
                 - Dados pré-processados
                 - Integração direta
-                - Comparação campo vs remoto
+                - Comparação campo vs remoto  
                 - Calibração de modelos
                 ''')
 
     # Informações sobre arquivos opcionais
     with st.sidebar.expander("📁 Arquivos Opcionais"):
         st.markdown('''
-        **Shapefile/Coordenadas:**
+        **🗺️ Shapefile/Coordenadas:**
         - Upload na sidebar
         - Fica persistente na sessão
         - Habilita métodos avançados de área
         - Navegue livremente entre páginas
 
-        **Dados LiDAR:**
-        - LAS/LAZ: Processamento completo
-        - Métricas CSV: Integração rápida
+        **🛩️ Dados LiDAR:**
+        - **LAS/LAZ:** Processamento completo
+        - **Métricas CSV:** Integração rápida
         - Ambos persistem na sessão
-        - Análise na Etapa 4
+        - **Análise no módulo LiDAR**
         ''')
 
 
@@ -1161,30 +1136,10 @@ def mostrar_metricas_rapidas_sidebar():
             st.sidebar.caption("⚠️ Erro nas métricas")
 
 
-def limpar_dados_lidar_sidebar():
-    '''Limpa dados LiDAR da sessão'''
-    keys_lidar = [
-        'arquivo_las',
-        'arquivo_metricas_lidar',
-        'dados_lidar_las',
-        'dados_lidar',
-        'calibracao_lidar'
-    ]
-
-    for key in keys_lidar:
-        if hasattr(st.session_state, key):
-            delattr(st.session_state, key)
-
-    st.sidebar.success("🗑️ Dados LiDAR limpos!")
-
-
 def criar_sidebar_melhorada():
     '''
     Versão melhorada da sidebar com processamento automático e feedback completo
     VERSÃO COMPLETA: Inclui upload LAS/LAZ, persistência total, tratamento robusto
-
-    Returns:
-        dict: Dicionário com os arquivos carregados e processados
     '''
     try:
         # Criar sidebar principal com processamento automático
@@ -1197,9 +1152,6 @@ def criar_sidebar_melhorada():
 
     except Exception as e:
         st.sidebar.error(f"❌ Erro na sidebar")
-        # Debug apenas se solicitado
-        if st.sidebar.button("🔍 Ver Erro", key="debug_sidebar"):
-            st.sidebar.code(str(e))
 
         # Retornar estrutura mínima em caso de erro
         return {
@@ -1228,43 +1180,30 @@ def obter_status_sistema_completo():
     '''
     Obtém status completo do sistema para uso em outras páginas
     VERSÃO COMPLETA: Inclui status LiDAR
-
-    Returns:
-        dict: Status completo do sistema
     '''
     try:
         status = {
             # Dados principais
-            'dados_inventario': hasattr(st.session_state,
-                                        'dados_inventario') and st.session_state.dados_inventario is not None,
+            'dados_inventario': hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None,
             'dados_cubagem': hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None,
 
             # Configuração
             'configurado': False,
 
             # Etapas principais
-            'hip_executado': hasattr(st.session_state,
-                                     'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None,
-            'vol_executado': hasattr(st.session_state,
-                                     'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None,
-            'inv_executado': hasattr(st.session_state,
-                                     'inventario_processado') and st.session_state.inventario_processado is not None,
+            'hip_executado': hasattr(st.session_state, 'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None,
+            'vol_executado': hasattr(st.session_state, 'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None,
+            'inv_executado': hasattr(st.session_state, 'inventario_processado') and st.session_state.inventario_processado is not None,
 
             # Dados LiDAR
-            'arquivo_las_disponivel': hasattr(st.session_state,
-                                              'arquivo_las') and st.session_state.arquivo_las is not None,
-            'metricas_lidar_disponivel': hasattr(st.session_state,
-                                                 'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None,
-            'dados_lidar_processados': hasattr(st.session_state,
-                                               'dados_lidar_las') and st.session_state.dados_lidar_las is not None,
-            'dados_lidar_integrados': hasattr(st.session_state,
-                                              'dados_lidar') and st.session_state.dados_lidar is not None,
+            'arquivo_las_disponivel': hasattr(st.session_state, 'arquivo_las') and st.session_state.arquivo_las is not None,
+            'metricas_lidar_disponivel': hasattr(st.session_state, 'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None,
+            'dados_lidar_processados': hasattr(st.session_state, 'dados_lidar_las') and st.session_state.dados_lidar_las is not None,
+            'dados_lidar_integrados': hasattr(st.session_state, 'dados_lidar') and st.session_state.dados_lidar is not None,
 
             # Arquivos opcionais
-            'shapefile_disponivel': hasattr(st.session_state,
-                                            'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None,
-            'coordenadas_disponiveis': hasattr(st.session_state,
-                                               'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None
+            'shapefile_disponivel': hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None,
+            'coordenadas_disponiveis': hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None
         }
 
         # Verificar configuração
@@ -1314,60 +1253,3 @@ def obter_status_sistema_completo():
             'progresso_total': 0,
             'progresso_completo': 0
         }
-
-
-
-def teste_persistencia_sidebar():
-    """
-    FUNÇÃO TEMPORÁRIA - Adicione no final do sidebar.py para testar
-    """
-    if st.sidebar.button("🧪 Teste Rápido Persistência"):
-        st.sidebar.write("**Teste de Persistência:**")
-
-        # Testar inventário
-        if hasattr(st.session_state, 'dados_inventario'):
-            dados = st.session_state.dados_inventario
-            if dados is not None and len(dados) > 0:
-                st.sidebar.success(f"✅ Inventário: {len(dados)} registros")
-
-                # Testar acesso às colunas
-                try:
-                    talhoes = dados['talhao'].nunique()
-                    dap_medio = dados['D_cm'].mean()
-                    st.sidebar.success(f"✅ Acesso OK: {talhoes} talhões, DAP {dap_medio:.1f}")
-                except Exception as e:
-                    st.sidebar.error(f"❌ Erro acesso: {e}")
-            else:
-                st.sidebar.error("❌ Inventário existe mas está vazio/inválido")
-        else:
-            st.sidebar.error("❌ dados_inventario não existe")
-
-        # Testar cubagem
-        if hasattr(st.session_state, 'dados_cubagem'):
-            dados = st.session_state.dados_cubagem
-            if dados is not None and len(dados) > 0:
-                st.sidebar.success(f"✅ Cubagem: {len(dados)} seções")
-
-                try:
-                    arvores = dados['arv'].nunique()
-                    st.sidebar.success(f"✅ Acesso OK: {arvores} árvores")
-                except Exception as e:
-                    st.sidebar.error(f"❌ Erro acesso: {e}")
-            else:
-                st.sidebar.error("❌ Cubagem existe mas está vazia/inválida")
-        else:
-            st.sidebar.error("❌ dados_cubagem não existe")
-
-        # Mostrar todas as keys relevantes
-        st.sidebar.write("**Keys relevantes:**")
-        keys_relevantes = [k for k in st.session_state.keys()
-                           if any(termo in k.lower() for termo in ['dados', 'inventario', 'cubagem', 'arquivo'])]
-
-        for key in keys_relevantes:
-            valor = st.session_state[key]
-            if hasattr(valor, '__len__'):
-                st.sidebar.caption(f"• {key}: {type(valor).__name__} ({len(valor)})")
-            else:
-                st.sidebar.caption(f"• {key}: {type(valor).__name__}")
-
-#teste_persistencia_sidebar()
