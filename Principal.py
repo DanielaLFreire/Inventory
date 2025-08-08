@@ -1767,23 +1767,21 @@ def main():
 
         # === SEÇÃO PRINCIPAL DA PÁGINA ===
         tab1, tab2, tab3, tab4 = st.tabs([
-            "📋 Instruções",
             "📊 Status do Sistema",
+            "📋 Instruções",
             "⚠️ Alertas",
             "👨🏻‍💻 Quem somos"
         ])
 
         with tab1:
-            criar_secao_instrucoes()
-
-        with tab2:
             mostrar_status_sistema()
-
-            # Preview inteligente dos dados - NOVA FUNCIONALIDADE
             st.markdown("---")
             mostrar_preview_inteligente()
             # === INFORMAÇÕES DE PERSISTÊNCIA ===
             mostrar_info_persistencia()
+
+        with tab2:
+            criar_secao_instrucoes()
 
         with tab3:
             mostrar_alertas_sistema()

@@ -376,7 +376,7 @@ def processar_metodo_metricas(tab_metricas):
 
         else:
             # Botão para processar integração
-            if st.button("🔗 Integrar com Inventário", type="primary", use_container_width=True):
+            if st.button("🛩️ Análise LiDAR", type="primary", use_container_width=True):
                 resultado = processar_e_integrar_lidar_metricas(arquivo_metricas)
                 return resultado
 
@@ -1232,42 +1232,6 @@ def main():
             with tab5:
                 mostrar_downloads_lidar(df_integrado, stats_comparacao, alertas)
 
-    # Mostrar dados salvos se existirem e não há processamento ativo
-    elif not mostrar_dados_salvos_lidar():
-        # Nenhum dado disponível - mostrar instruções
-        st.markdown("---")
-        st.info("📋 **Como Usar Esta Página:**")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            st.markdown("""
-            **🛩️ Processamento LAS/LAZ:**
-            1. 📁 Carregue arquivo .las/.laz na sidebar
-            2. 🔄 Volte aqui para processar
-            3. 📊 Análise automática com inventário
-
-            **💡 Vantagens:**
-            - Máxima precisão e controle
-            - Métricas personalizadas  
-            - Integração direta
-            """)
-
-        with col2:
-            st.markdown("""
-            **📊 Métricas Pré-processadas:**
-            1. 📁 Carregue CSV/Excel com métricas na sidebar  
-            2. 🔄 Volte aqui para integrar
-            3. 📈 Comparação campo vs LiDAR
-
-            **💡 Vantagens:**
-            - Processamento rápido
-            - Dados já validados
-            - Compatível com R/FUSION
-            """)
-
-        if not processamento_las_disponivel:
-            st.warning("⚠️ **Processamento LAS indisponível** - instale dependências para habilitar")
 
     # Botão para limpar dados (sem afetar uploads da sidebar)
     if hasattr(st.session_state, 'dados_lidar') or hasattr(st.session_state, 'dados_lidar_las'):
