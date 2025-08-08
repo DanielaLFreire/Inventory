@@ -1,8 +1,8 @@
-# Principal.py - VERSÃO COMPLETA COM LAS/LAZ
+# Principal.py - VERSÃO COMPLETA COM LAS/LAZ E PREVIEW EXPANDIDO
 """
 Sistema Integrado de Inventário Florestal - GreenVista
 Página principal do sistema com upload de dados e navegação
-VERSÃO COMPLETA: Inclui processamento LAS/LAZ, persistência total, interface completa
+VERSÃO COMPLETA: Inclui processamento LAS/LAZ, persistência total, interface completa, preview expandido
 """
 
 import streamlit as st
@@ -37,11 +37,9 @@ try:
         ProcessadorLASIntegrado,
         integrar_com_pagina_lidar
     )
-
     PROCESSAMENTO_LAS_DISPONIVEL = True
 except ImportError:
     PROCESSAMENTO_LAS_DISPONIVEL = False
-
 
 
 # Configurar página
@@ -441,81 +439,825 @@ def mostrar_estatisticas_cubagem(df_limpo, df_original):
         st.error(f"❌ Erro ao mostrar estatísticas: {e}")
 
 
-def mostrar_preview_dados_carregados():
-    """Mostra preview dos dados já carregados incluindo LiDAR"""
-    try:
-        # === DADOS PRINCIPAIS ===
-        if hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
-            st.subheader("📋 Dados de Inventário Carregados")
+# ================================
+# FUNÇÕES DE PREVIEW EXPANDIDO
+# ================================
 
+def escolher_modo_preview():
+    """Permite escolher entre preview resumido ou detalhado"""
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        modo_detalhado = st.toggle(
+            "📊 **Análise Detalhada dos Dados**", 
+            value=False,
+            help="Ative para ver estatísticas completas de todos os arquivos carregados\n\n" +
+                 "• **Desativado**: Resumo geral e status\n" +
+                 "• **Ativado**: Análise completa com métricas, distribuições e qualidade"
+        )
+    
+    return modo_detalhado
+
+
+def mostrar_preview_inteligente():
+    """Mostra preview adequado baseado na escolha do usuário"""
+    modo_detalhado = escolher_modo_preview()
+    
+    if modo_detalhado:
+        mostrar_preview_dados_carregados()  # Versão completa e detalhada
+    else:
+        mostrar_resumo_geral_dados()  # Versão resumida e concisa
+
+
+def mostrar_resumo_geral_dados():
+    """
+    Mostra um resumo conciso e direto de todos os dados carregados
+    VERSÃO OTIMIZADA: Para uso como modo 'simples' vs detalhado
+    """
+    st.subheader("📊 Resumo dos Dados Carregados")
+    
+    # Verificar dados disponíveis
+    tem_inventario = hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None
+    tem_cubagem = hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None
+    tem_las = hasattr(st.session_state, 'arquivo_las') and st.session_state.arquivo_las is not None
+    tem_metricas_lidar = hasattr(st.session_state, 'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None
+    tem_shapefile = hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None
+    tem_coordenadas = hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None
+    
+    # === STATUS GERAL ===
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        if tem_inventario and tem_cubagem:
+            st.success("✅ **Dados Core**\nCompletos")
+            if tem_inventario:
+                df_inv = st.session_state.dados_inventario
+                st.caption(f"📋 {len(df_inv):,} registros")
+        else:
+            st.error("❌ **Dados Core**\nIncompletos")
+            
+    with col2:
+        # Contar arquivos extras
+        extras = sum([tem_las, tem_metricas_lidar, tem_shapefile, tem_coordenadas])
+        if extras > 0:
+            st.info(f"📁 **{extras} Arquivos**\nAdicionais")
+            extras_lista = []
+            if tem_las or tem_metricas_lidar:
+                extras_lista.append("🛩️ LiDAR")
+            if tem_shapefile:
+                extras_lista.append("🗺️ SHP")
+            if tem_coordenadas:
+                extras_lista.append("📍 Coord")
+            st.caption(" • ".join(extras_lista))
+        else:
+            st.warning("📁 **Sem Arquivos**\nAdicionais")
+    
+    with col3:
+        # Status de processamento
+        processados = 0
+        total_processos = 3
+        
+        if hasattr(st.session_state, 'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None:
+            processados += 1
+        if hasattr(st.session_state, 'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None:
+            processados += 1
+        if hasattr(st.session_state, 'inventario_processado') and st.session_state.inventario_processado is not None:
+            processados += 1
+            
+        if processados == total_processos:
+            st.success("🎉 **Análises**\nCompletas")
+        elif processados > 0:
+            st.warning(f"⚠️ **{processados}/{total_processos} Etapas**\nConcluídas")
+        else:
+            st.info("⏳ **Análises**\nPendentes")
+        
+    with col4:
+        # LiDAR específico
+        if hasattr(st.session_state, 'dados_lidar') and st.session_state.dados_lidar is not None:
+            st.success("🛩️ **LiDAR**\nIntegrado")
+            stats = st.session_state.dados_lidar.get('stats_comparacao', {})
+            if 'r2' in stats:
+                r2 = stats['r2']
+                st.caption(f"📊 R²: {r2:.3f}")
+        elif tem_las or tem_metricas_lidar:
+            st.warning("🛩️ **LiDAR**\nDisponível")
+            st.caption("⏳ Não processado")
+        else:
+            st.info("🛩️ **LiDAR**\nOpcional")
+
+    # === MÉTRICAS RÁPIDAS ===
+    if tem_inventario and tem_cubagem:
+        st.markdown("---")
+        col1, col2, col3, col4, col5 = st.columns(5)
+        
+        try:
             df_inv = st.session_state.dados_inventario
-
-            if isinstance(df_inv, pd.DataFrame) and len(df_inv) > 0:
-                col1, col2, col3, col4 = st.columns(4)
-                with col1:
-                    st.metric("Registros", len(df_inv))
-                with col2:
-                    st.metric("Talhões", df_inv['talhao'].nunique())
-                with col3:
-                    try:
-                        dap_medio = df_inv['D_cm'].mean()
-                        st.metric("DAP Médio", f"{dap_medio:.1f} cm")
-                    except Exception:
-                        st.metric("DAP Médio", "N/A")
-                with col4:
-                    try:
-                        altura_media = df_inv['H_m'].mean()
-                        st.metric("Altura Média", f"{altura_media:.1f} m")
-                    except Exception:
-                        st.metric("Altura Média", "N/A")
-
-                if st.checkbox("👀 Mostrar Preview do Inventário"):
-                    st.dataframe(df_inv.head(), use_container_width=True)
-            else:
-                st.warning("⚠️ Dados de inventário inválidos ou vazios")
-
-        if hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
-            st.subheader("📏 Dados de Cubagem Carregados")
-
             df_cub = st.session_state.dados_cubagem
+            
+            with col1:
+                talhoes = df_inv['talhao'].nunique()
+                st.metric("🌳 Talhões", talhoes)
+                
+            with col2:
+                parcelas = df_inv.groupby(['talhao', 'parcela']).ngroups
+                st.metric("📍 Parcelas", parcelas)
+                
+            with col3:
+                arvores_cubadas = df_cub['arv'].nunique()
+                st.metric("📏 Árvores Cubadas", arvores_cubadas)
+                
+            with col4:
+                dap_medio = df_inv['D_cm'].mean()
+                st.metric("📐 DAP Médio", f"{dap_medio:.1f} cm")
+                
+            with col5:
+                altura_media = df_inv['H_m'].mean()
+                st.metric("📏 Altura Média", f"{altura_media:.1f} m")
+                
+        except Exception:
+            st.caption("⚠️ Erro ao calcular métricas rápidas")
 
-            if isinstance(df_cub, pd.DataFrame) and len(df_cub) > 0:
-                col1, col2, col3, col4 = st.columns(4)
+    # === PRÓXIMOS PASSOS ===
+    st.markdown("---")
+    st.markdown("### 🚀 Próximos Passos")
+    
+    if not (tem_inventario and tem_cubagem):
+        st.error("**1.** 📁 Carregue dados de Inventário e Cubagem na sidebar")
+        return
+    
+    # Verificar configuração
+    try:
+        from config.configuracoes_globais import obter_configuracao_global
+        config_global = obter_configuracao_global()
+        configurado = config_global.get('configurado', False)
+        
+        if not configurado:
+            st.warning("**1.** ⚙️ Configure o sistema na Etapa 0")
+            st.info("**2.** 🔄 Execute etapas 1-3 em sequência")
+            return
+    except:
+        st.warning("**1.** ⚙️ Configure o sistema na Etapa 0")
+        return
+    
+    # Verificar etapas executadas
+    hip_ok = hasattr(st.session_state, 'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None
+    vol_ok = hasattr(st.session_state, 'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None
+    inv_ok = hasattr(st.session_state, 'inventario_processado') and st.session_state.inventario_processado is not None
+    
+    if not hip_ok:
+        st.info("**1.** 🌳 Execute Etapa 1 - Modelos Hipsométricos")
+    elif not vol_ok:
+        st.info("**1.** 📊 Execute Etapa 2 - Modelos Volumétricos")
+    elif not inv_ok:
+        st.info("**1.** 📈 Execute Etapa 3 - Inventário Final")
+    else:
+        st.success("🎉 **Todas as etapas principais concluídas!**")
+        
+        # Sugestões extras
+        if tem_las or tem_metricas_lidar:
+            if not hasattr(st.session_state, 'dados_lidar') or st.session_state.dados_lidar is None:
+                st.info("💡 **Opcional:** Processe dados LiDAR na Análise LiDAR")
+        else:
+            st.info("💡 **Opcional:** Carregue dados LiDAR para análises avançadas")
+
+    # === INFORMAÇÕES DE SESSÃO ===
+    with st.expander("💾 Informações da Sessão"):
+        st.markdown("""
+        **✅ Dados Persistentes:**
+        - Todos os arquivos permanecem na sessão
+        - Navegue livremente entre páginas
+        - Resultados são mantidos até fechar o navegador
+        
+        **⚠️ Dados são perdidos ao:**
+        - Fechar/recarregar o navegador
+        - Timeout por inatividade prolongada
+        
+        **💡 Dica:** Faça download dos resultados importantes!
+        """)
+        
+        # Mostrar arquivos atualmente na sessão
+        arquivos_na_sessao = []
+        if tem_inventario:
+            arquivos_na_sessao.append("📋 Inventário")
+        if tem_cubagem:
+            arquivos_na_sessao.append("📏 Cubagem")
+        if tem_las:
+            arquivos_na_sessao.append("🛩️ Arquivo LAS")
+        if tem_metricas_lidar:
+            arquivos_na_sessao.append("📊 Métricas LiDAR")
+        if tem_shapefile:
+            arquivos_na_sessao.append("🗺️ Shapefile")
+        if tem_coordenadas:
+            arquivos_na_sessao.append("📍 Coordenadas")
+            
+        if arquivos_na_sessao:
+            st.success("**Na sessão:** " + " • ".join(arquivos_na_sessao))
+        else:
+            st.info("Nenhum arquivo na sessão")
+
+
+def mostrar_preview_dados_carregados():
+    """
+    Mostra preview completo de todos os dados carregados
+    VERSÃO COM EXPANDERS: Organizado como mostrar_estatisticas_cubagem
+    """
+    try:
+        st.subheader("📊 Dados Carregados no Sistema")
+
+        # === DADOS DE INVENTÁRIO ===
+        if hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
+            df_inventario = st.session_state.dados_inventario
+
+            if isinstance(df_inventario, pd.DataFrame) and len(df_inventario) > 0:
+                st.success(f"✅ **Inventário processado:** {len(df_inventario)} registros válidos")
+
+                with st.expander("📊 Estatísticas do Inventário"):
+                    # Métricas principais
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("📊 Registros", f"{len(df_inventario):,}")
+                        talhoes = df_inventario['talhao'].nunique()
+                        st.metric("🌳 Talhões", talhoes)
+                    with col2:
+                        parcelas = df_inventario.groupby(['talhao', 'parcela']).ngroups
+                        st.metric("📍 Parcelas", parcelas)
+                        try:
+                            dap_medio = df_inventario['D_cm'].mean()
+                            st.metric("📐 DAP Médio", f"{dap_medio:.1f} cm")
+                        except:
+                            st.metric("📐 DAP Médio", "N/A")
+                    with col3:
+                        try:
+                            altura_media = df_inventario['H_m'].mean()
+                            st.metric("📏 Altura Média", f"{altura_media:.1f} m")
+                            dap_min, dap_max = df_inventario['D_cm'].min(), df_inventario['D_cm'].max()
+                            st.metric("📊 DAP Min-Max", f"{dap_min:.1f}-{dap_max:.1f}")
+                        except:
+                            st.metric("📏 Altura Média", "N/A")
+                            st.metric("📊 DAP Min-Max", "N/A")
+                    with col4:
+                        try:
+                            alt_min, alt_max = df_inventario['H_m'].min(), df_inventario['H_m'].max()
+                            st.metric("📏 Alt Min-Max", f"{alt_min:.1f}-{alt_max:.1f}")
+                            # Área basal total
+                            area_basal = (df_inventario['D_cm'] ** 2 * np.pi / 40000).sum()
+                            st.metric("🎯 Área Basal", f"{area_basal:.1f} m²")
+                        except:
+                            st.metric("📏 Alt Min-Max", "N/A")
+                            st.metric("🎯 Área Basal", "N/A")
+
+                    # Informações de idade se disponível
+                    if 'idade_anos' in df_inventario.columns:
+                        try:
+                            idade_info = df_inventario.groupby('talhao')['idade_anos'].agg(['mean', 'min', 'max'])
+                            st.info(f"🕐 **Idade:** {idade_info['mean'].mean():.1f} anos (média geral)")
+                        except Exception:
+                            pass
+
+                    # Preview dos dados
+                    st.subheader("👀 Preview dos Dados")
+                    if len(df_inventario) > 0:
+                        st.dataframe(df_inventario.head(10), use_container_width=True)
+                    else:
+                        st.warning("⚠️ Nenhum dado para exibir")
+
+                    # Distribuições opcionais
+                    if st.checkbox("📊 Mostrar Distribuições", key="dist_inventario"):
+                        col_dist1, col_dist2 = st.columns(2)
+                        with col_dist1:
+                            st.write("**Distribuição DAP**")
+                            try:
+                                hist_dap = df_inventario['D_cm'].value_counts().sort_index().head(20)
+                                st.bar_chart(hist_dap)
+                            except:
+                                st.caption("⚠️ Erro ao gerar distribuição DAP")
+                        with col_dist2:
+                            st.write("**Árvores por Talhão**")
+                            try:
+                                arvores_talhao = df_inventario['talhao'].value_counts().sort_index()
+                                st.bar_chart(arvores_talhao)
+                            except:
+                                st.caption("⚠️ Erro ao gerar distribuição por talhão")
+            else:
+                st.warning("⚠️ Inventário existe mas está vazio ou inválido")
+        else:
+            st.error("❌ **Dados de Inventário:** Não carregados")
+
+        # === DADOS DE CUBAGEM ===
+        if hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
+            df_cubagem = st.session_state.dados_cubagem
+
+            if isinstance(df_cubagem, pd.DataFrame) and len(df_cubagem) > 0:
+                arvores_cubadas = df_cubagem['arv'].nunique()
+                st.success(f"✅ **Cubagem processada:** {arvores_cubadas} árvores cubadas")
+
+                with st.expander("📊 Estatísticas da Cubagem"):
+                    # Métricas principais
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("📏 Árvores", arvores_cubadas)
+                        total_secoes = len(df_cubagem)
+                        st.metric("📊 Seções", f"{total_secoes:,}")
+                    with col2:
+                        talhoes_cub = df_cubagem['talhao'].nunique()
+                        st.metric("🌳 Talhões", talhoes_cub)
+                        try:
+                            secoes_media = df_cubagem.groupby(['talhao', 'arv']).size().mean()
+                            st.metric("📐 Seções/Árvore", f"{secoes_media:.1f}")
+                        except:
+                            st.metric("📐 Seções/Árvore", "N/A")
+                    with col3:
+                        try:
+                            dap_medio_cub = df_cubagem['D_cm'].mean()
+                            st.metric("📊 DAP Médio", f"{dap_medio_cub:.1f} cm")
+                            altura_media_cub = df_cubagem['H_m'].mean()
+                            st.metric("📏 Alt. Média", f"{altura_media_cub:.1f} m")
+                        except:
+                            st.metric("📊 DAP Médio", "N/A")
+                            st.metric("📏 Alt. Média", "N/A")
+                    with col4:
+                        try:
+                            diam_secao_medio = df_cubagem['d_cm'].mean()
+                            st.metric("🎯 Diâm. Seção", f"{diam_secao_medio:.1f} cm")
+                            # Consistência d/DAP
+                            df_cubagem['razao_d_D'] = df_cubagem['d_cm'] / df_cubagem['D_cm']
+                            consistencia = df_cubagem['razao_d_D'].mean()
+                            st.metric("⚖️ Consistência", f"{consistencia:.2f}")
+                        except:
+                            st.metric("🎯 Diâm. Seção", "N/A")
+                            st.metric("⚖️ Consistência", "N/A")
+
+                    # Análise de qualidade
+                    try:
+                        if 'razao_d_D' in df_cubagem.columns:
+                            consistencia_pct = (df_cubagem['razao_d_D'] <= 1.0).mean() * 100
+                            if consistencia_pct > 95:
+                                st.success(
+                                    f"🎯 **Excelente qualidade:** {consistencia_pct:.1f}% das seções consistentes")
+                            elif consistencia_pct > 85:
+                                st.info(f"👍 **Boa qualidade:** {consistencia_pct:.1f}% das seções consistentes")
+                            else:
+                                st.warning(
+                                    f"⚠️ **Verificar qualidade:** {consistencia_pct:.1f}% das seções consistentes")
+                    except:
+                        pass
+
+                    # Preview dos dados
+                    st.subheader("👀 Preview dos Dados")
+                    if len(df_cubagem) > 0:
+                        st.dataframe(df_cubagem.head(10), use_container_width=True)
+                    else:
+                        st.warning("⚠️ Nenhum dado para exibir")
+
+                    # Análise por árvore opcional
+                    if st.checkbox("🌳 Análise Detalhada por Árvore", key="analise_arvore_detalhada"):
+                        try:
+                            arvore_stats = df_cubagem.groupby(['talhao', 'arv']).agg({
+                                'D_cm': 'first',
+                                'H_m': 'first',
+                                'd_cm': ['count', 'mean', 'std'],
+                                'h_m': 'max'
+                            }).round(2)
+
+                            arvore_stats.columns = ['DAP', 'Altura', 'N_Secoes', 'Diam_Medio', 'Diam_Std', 'Alt_Cubada']
+                            st.dataframe(arvore_stats.head(15), use_container_width=True)
+                        except Exception as e:
+                            st.error(f"⚠️ Erro na análise por árvore: {e}")
+            else:
+                st.warning("⚠️ Cubagem existe mas está vazia ou inválida")
+        else:
+            st.error("❌ **Dados de Cubagem:** Não carregados")
+
+        # === DADOS DE ÁREA (ARQUIVOS ESPACIAIS) ===
+        arquivos_espaciais_encontrados = False
+
+        # Shapefile
+        if hasattr(st.session_state, 'arquivo_shapefile') and st.session_state.arquivo_shapefile is not None:
+            arquivo_shapefile = st.session_state.arquivo_shapefile
+            arquivos_espaciais_encontrados = True
+
+            st.success("✅ **Shapefile carregado** - Disponível para cálculo preciso de áreas")
+
+            with st.expander("🗺️ Informações do Shapefile"):
+                col1, col2, col3 = st.columns(3)
                 with col1:
-                    st.metric("Registros", len(df_cub))
+                    nome_arquivo = getattr(arquivo_shapefile, 'name', 'shapefile.zip')
+                    st.metric("📁 Arquivo", nome_arquivo.split('.')[-1].upper())
+                    st.metric("📄 Nome", nome_arquivo[:20] + "..." if len(nome_arquivo) > 20 else nome_arquivo)
                 with col2:
                     try:
-                        arvores = df_cub['arv'].nunique()
-                        st.metric("Árvores", arvores)
-                    except Exception:
-                        st.metric("Árvores", "N/A")
+                        tamanho_kb = getattr(arquivo_shapefile, 'size', 0) / 1024
+                        st.metric("💾 Tamanho", f"{tamanho_kb:.0f} KB")
+                    except:
+                        st.metric("💾 Tamanho", "N/A")
+                    st.metric("📊 Status", "✅ Ativo")
                 with col3:
-                    try:
-                        dap_medio = df_cub['D_cm'].mean()
-                        st.metric("DAP Médio", f"{dap_medio:.1f} cm")
-                    except Exception:
-                        st.metric("DAP Médio", "N/A")
-                with col4:
-                    try:
-                        seções = df_cub.groupby(['talhao', 'arv']).size().mean()
-                        st.metric("Seções/Árvore", f"{seções:.1f}")
-                    except Exception:
-                        st.metric("Seções/Árvore", "N/A")
+                    st.metric("🎯 Uso", "Cálculo de áreas")
+                    st.metric("⚙️ Config", "Método SHP")
 
-                if st.checkbox("👀 Mostrar Preview da Cubagem"):
-                    st.dataframe(df_cub.head(), use_container_width=True)
-            else:
-                st.warning("⚠️ Dados de cubagem inválidos ou vazios")
+                st.info(
+                    "🗺️ **Uso recomendado:** Configure na Etapa 0 o método de área como 'Baseado em Shapefile' para cálculos precisos")
+
+        # Coordenadas
+        if hasattr(st.session_state, 'arquivo_coordenadas') and st.session_state.arquivo_coordenadas is not None:
+            arquivo_coordenadas = st.session_state.arquivo_coordenadas
+            arquivos_espaciais_encontrados = True
+
+            st.success("✅ **Coordenadas carregadas** - Disponíveis para análises espaciais")
+
+            with st.expander("📍 Informações das Coordenadas"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    nome_arquivo = getattr(arquivo_coordenadas, 'name', 'coordenadas.csv')
+                    st.metric("📁 Arquivo", nome_arquivo.split('.')[-1].upper())
+                    st.metric("📄 Nome", nome_arquivo[:20] + "..." if len(nome_arquivo) > 20 else nome_arquivo)
+                with col2:
+                    try:
+                        tamanho_kb = getattr(arquivo_coordenadas, 'size', 0) / 1024
+                        st.metric("💾 Tamanho", f"{tamanho_kb:.0f} KB")
+                    except:
+                        st.metric("💾 Tamanho", "N/A")
+                    st.metric("📊 Status", "✅ Ativo")
+                with col3:
+                    st.metric("🎯 Uso", "Análises espaciais")
+                    st.metric("🗺️ Tipo", "Coordenadas XY")
+
+                # Tentar mostrar informações das coordenadas
+                try:
+                    df_coordenadas = carregar_arquivo_seguro(arquivo_coordenadas, "coordenadas")
+                    if df_coordenadas is not None and len(df_coordenadas) > 0:
+                        st.info(f"📍 **{len(df_coordenadas)} coordenadas** carregadas e prontas para uso")
+
+                        # Preview opcional
+                        if st.checkbox("👀 Preview das Coordenadas", key="preview_coord_expander"):
+                            st.subheader("📊 Dados das Coordenadas")
+                            st.dataframe(df_coordenadas.head(), use_container_width=True)
+
+                            # Estatísticas básicas se houver colunas X, Y
+                            try:
+                                if 'X' in df_coordenadas.columns and 'Y' in df_coordenadas.columns:
+                                    col_coord1, col_coord2 = st.columns(2)
+                                    with col_coord1:
+                                        x_min, x_max = df_coordenadas['X'].min(), df_coordenadas['X'].max()
+                                        st.metric("🌐 X Min-Max", f"{x_min:.0f} - {x_max:.0f}")
+                                    with col_coord2:
+                                        y_min, y_max = df_coordenadas['Y'].min(), df_coordenadas['Y'].max()
+                                        st.metric("🌐 Y Min-Max", f"{y_min:.0f} - {y_max:.0f}")
+                            except:
+                                pass
+                except Exception:
+                    st.warning("⚠️ Erro ao carregar preview das coordenadas")
+
+        if not arquivos_espaciais_encontrados:
+            st.info("📁 **Arquivos de Área:** Nenhum carregado (opcional)")
 
         # === DADOS LIDAR ===
-        mostrar_preview_dados_lidar()
+        dados_lidar_encontrados = False
+
+        # Arquivo LAS/LAZ
+        if hasattr(st.session_state, 'arquivo_las') and st.session_state.arquivo_las is not None:
+            arquivo_las = st.session_state.arquivo_las
+            dados_lidar_encontrados = True
+
+            st.success("✅ **Arquivo LAS/LAZ carregado** - Pronto para processamento")
+
+            with st.expander("🛩️ Informações do Arquivo LAS/LAZ"):
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    nome_arquivo = getattr(arquivo_las, 'name', 'arquivo.las')
+                    st.metric("📁 Tipo", nome_arquivo.split('.')[-1].upper())
+                    st.metric("📄 Nome", nome_arquivo[:15] + "..." if len(nome_arquivo) > 15 else nome_arquivo)
+                with col2:
+                    try:
+                        tamanho_mb = getattr(arquivo_las, 'size', 0) / (1024 * 1024)
+                        st.metric("💾 Tamanho", f"{tamanho_mb:.1f} MB")
+                    except:
+                        st.metric("💾 Tamanho", "N/A")
+                    st.metric("🎯 Uso", "Processamento LiDAR")
+                with col3:
+                    processado = hasattr(st.session_state,
+                                         'dados_lidar_las') and st.session_state.dados_lidar_las is not None
+                    st.metric("📊 Status", "✅ Processado" if processado else "⏳ Pendente")
+                    st.metric("🔄 Ação", "Concluído" if processado else "Processar")
+                with col4:
+                    st.metric("📍 Destino", "Análise LiDAR")
+                    st.metric("⚙️ Método", "Automático")
+
+                if not processado:
+                    st.info(
+                        "🚀 **Próximo passo:** Acesse a página 'Análise LiDAR' para processar o arquivo e extrair métricas")
+
+        # Dados LAS processados
+        if hasattr(st.session_state, 'dados_lidar_las') and st.session_state.dados_lidar_las is not None:
+            dados_las = st.session_state.dados_lidar_las
+            dados_lidar_encontrados = True
+
+            if 'df_metricas' in dados_las:
+                df_metricas = dados_las['df_metricas']
+                st.success(f"✅ **Dados LAS processados:** {len(df_metricas)} parcelas com métricas")
+
+                with st.expander("📊 Estatísticas do Processamento LAS"):
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric("📍 Parcelas", len(df_metricas))
+                        try:
+                            altura_media = df_metricas['altura_media'].mean()
+                            st.metric("📏 Alt. Média", f"{altura_media:.1f} m")
+                        except:
+                            st.metric("📏 Alt. Média", "N/A")
+                    with col2:
+                        try:
+                            pontos_total = df_metricas['n_pontos'].sum()
+                            st.metric("🎯 Total Pontos", f"{pontos_total:,}")
+                            densidade_media = df_metricas['densidade'].mean()
+                            st.metric("📊 Densidade", f"{densidade_media:.1f} pts/m²")
+                        except:
+                            st.metric("🎯 Total Pontos", "N/A")
+                            st.metric("📊 Densidade", "N/A")
+                    with col3:
+                        try:
+                            cobertura_media = df_metricas['cobertura'].mean()
+                            st.metric("🌳 Cobertura", f"{cobertura_media:.1f}%")
+                            if 'altura_max' in df_metricas.columns:
+                                altura_max = df_metricas['altura_max'].max()
+                                st.metric("🔝 Alt. Máxima", f"{altura_max:.1f} m")
+                        except:
+                            st.metric("🌳 Cobertura", "N/A")
+                            st.metric("🔝 Alt. Máxima", "N/A")
+                    with col4:
+                        try:
+                            if 'altura_p95' in df_metricas.columns:
+                                altura_p95 = df_metricas['altura_p95'].mean()
+                                st.metric("📈 Alt. P95", f"{altura_p95:.1f} m")
+                            if 'biomassa' in df_metricas.columns:
+                                biomassa_total = df_metricas['biomassa'].sum()
+                                st.metric("🌿 Biomassa", f"{biomassa_total:.0f} kg")
+                        except:
+                            st.metric("📈 Alt. P95", "N/A")
+                            st.metric("🌿 Biomassa", "N/A")
+
+                    # Análise de qualidade dos dados LAS
+                    try:
+                        if 'densidade' in df_metricas.columns:
+                            densidade_min = df_metricas['densidade'].min()
+                            densidade_media = df_metricas['densidade'].mean()
+
+                            if densidade_min > 4:
+                                st.success(
+                                    f"🎯 **Excelente densidade:** mínimo {densidade_min:.1f} pts/m², média {densidade_media:.1f} pts/m²")
+                            elif densidade_min > 2:
+                                st.info(
+                                    f"👍 **Boa densidade:** mínimo {densidade_min:.1f} pts/m², média {densidade_media:.1f} pts/m²")
+                            else:
+                                st.warning(
+                                    f"⚠️ **Densidade baixa:** mínimo {densidade_min:.1f} pts/m², média {densidade_media:.1f} pts/m²")
+                    except:
+                        pass
+
+                    # Preview das métricas
+                    st.subheader("👀 Preview das Métricas LAS")
+                    if len(df_metricas) > 0:
+                        st.dataframe(df_metricas.head(10), use_container_width=True)
+                    else:
+                        st.warning("⚠️ Nenhuma métrica para exibir")
+
+        # Métricas LiDAR pré-processadas
+        elif hasattr(st.session_state,
+                     'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None:
+            arquivo_metricas = st.session_state.arquivo_metricas_lidar
+            dados_lidar_encontrados = True
+
+            st.success("✅ **Métricas LiDAR carregadas** - Dados pré-processados disponíveis")
+
+            with st.expander("📊 Informações das Métricas LiDAR"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    nome_arquivo = getattr(arquivo_metricas, 'name', 'metricas.csv')
+                    st.metric("📁 Tipo", nome_arquivo.split('.')[-1].upper())
+                    st.metric("📄 Arquivo", nome_arquivo[:20] + "..." if len(nome_arquivo) > 20 else nome_arquivo)
+                with col2:
+                    integrado = hasattr(st.session_state, 'dados_lidar') and st.session_state.dados_lidar is not None
+                    st.metric("📊 Status", "✅ Integrado" if integrado else "⏳ Pendente")
+                    st.metric("🎯 Origem", "Pré-processado")
+                with col3:
+                    st.metric("🔄 Próximo", "Integração" if not integrado else "Concluído")
+                    st.metric("📍 Destino", "Análise LiDAR")
+
+                if not integrado:
+                    st.info(
+                        "🚀 **Próximo passo:** Acesse a página 'Análise LiDAR' para integrar com os dados de inventário")
+
+        # Dados LiDAR integrados
+        if hasattr(st.session_state, 'dados_lidar') and st.session_state.dados_lidar is not None:
+            dados_lidar = st.session_state.dados_lidar
+            dados_lidar_encontrados = True
+
+            st.success("✅ **LiDAR integrado com inventário** - Análise comparativa disponível")
+
+            with st.expander("🔗 Estatísticas da Integração LiDAR"):
+                if 'stats_comparacao' in dados_lidar and dados_lidar['stats_comparacao'] is not None:
+                    stats = dados_lidar['stats_comparacao']
+
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    with col1:
+                        correlacao = stats.get('correlacao', 0)
+                        st.metric("📊 Correlação", f"{correlacao:.3f}")
+                        r2 = stats.get('r2', 0)
+                        st.metric("📈 R²", f"{r2:.3f}")
+                    with col2:
+                        rmse = stats.get('rmse', 0)
+                        st.metric("📏 RMSE", f"{rmse:.2f} m")
+                        bias = stats.get('bias', 0)
+                        st.metric("⚖️ Bias", f"{bias:+.2f} m")
+                    with col3:
+                        n_parcelas = stats.get('n_parcelas', 0)
+                        st.metric("📍 Parcelas", n_parcelas)
+                        try:
+                            mae = stats.get('mae', 0)
+                            st.metric("📊 MAE", f"{mae:.2f} m")
+                        except:
+                            st.metric("📊 MAE", "N/A")
+                    with col4:
+                        try:
+                            mape = stats.get('mape', 0)
+                            st.metric("📈 MAPE", f"{mape:.1f}%")
+                            altura_campo_media = stats.get('altura_campo_media', 0)
+                            st.metric("🌳 Alt. Campo", f"{altura_campo_media:.1f} m")
+                        except:
+                            st.metric("📈 MAPE", "N/A")
+                            st.metric("🌳 Alt. Campo", "N/A")
+                    with col5:
+                        try:
+                            altura_lidar_media = stats.get('altura_lidar_media', 0)
+                            st.metric("🛩️ Alt. LiDAR", f"{altura_lidar_media:.1f} m")
+                            diferenca_media = stats.get('diferenca_media', 0)
+                            st.metric("📏 Diff. Média", f"{diferenca_media:+.2f} m")
+                        except:
+                            st.metric("🛩️ Alt. LiDAR", "N/A")
+                            st.metric("📏 Diff. Média", "N/A")
+
+                    # Interpretar qualidade da correlação
+                    st.subheader("🎯 Qualidade da Integração")
+                    if correlacao >= 0.8:
+                        st.success(f"🎯 **Excelente correlação** entre dados de campo e LiDAR (r = {correlacao:.3f})")
+                    elif correlacao >= 0.6:
+                        st.info(f"👍 **Boa correlação** entre dados de campo e LiDAR (r = {correlacao:.3f})")
+                    elif correlacao >= 0.4:
+                        st.warning(f"⚠️ **Correlação moderada** entre dados de campo e LiDAR (r = {correlacao:.3f})")
+                    else:
+                        st.error(f"❌ **Correlação fraca** entre dados de campo e LiDAR (r = {correlacao:.3f})")
+
+                    # Análise do R²
+                    if r2 >= 0.7:
+                        st.success(
+                            f"📈 **Excelente ajuste:** R² = {r2:.3f} (modelo explica {r2 * 100:.1f}% da variação)")
+                    elif r2 >= 0.5:
+                        st.info(f"📊 **Bom ajuste:** R² = {r2:.3f} (modelo explica {r2 * 100:.1f}% da variação)")
+                    else:
+                        st.warning(
+                            f"⚠️ **Ajuste moderado:** R² = {r2:.3f} (modelo explica {r2 * 100:.1f}% da variação)")
+
+                # Mostrar alertas se houver
+                if 'alertas' in dados_lidar and dados_lidar['alertas']:
+                    alertas = dados_lidar['alertas']
+                    if len(alertas) > 0:
+                        st.subheader("⚠️ Alertas da Integração")
+                        for i, alerta in enumerate(alertas[:5], 1):  # Mostrar até 5 alertas
+                            st.warning(f"**{i}.** {alerta}")
+                        if len(alertas) > 5:
+                            st.caption(f"... e mais {len(alertas) - 5} alertas")
+
+        if not dados_lidar_encontrados:
+            st.info("🛩️ **Dados LiDAR:** Nenhum carregado (opcional)")
+
+        # === RESUMO FINAL ===
+        st.markdown("---")
+
+        with st.expander("🎯 Resumo do Status Geral", expanded=True):
+            # Verificar completude
+            tem_inventario = hasattr(st.session_state,
+                                     'dados_inventario') and st.session_state.dados_inventario is not None
+            tem_cubagem = hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None
+            dados_basicos_ok = tem_inventario and tem_cubagem
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                st.subheader("📊 Status Principal")
+                if dados_basicos_ok:
+                    st.success("🎉 **Dados principais completos!**")
+                    st.caption("✅ Inventário e Cubagem carregados")
+                    st.caption("🚀 Sistema pronto para análises")
+                else:
+                    st.error("❌ **Dados principais incompletos**")
+                    if not tem_inventario:
+                        st.caption("❌ Falta: Inventário")
+                    if not tem_cubagem:
+                        st.caption("❌ Falta: Cubagem")
+
+            with col2:
+                st.subheader("📁 Dados Adicionais")
+                extras = []
+                if arquivos_espaciais_encontrados:
+                    extras.append("🗺️ Espaciais")
+                if dados_lidar_encontrados:
+                    extras.append("🛩️ LiDAR")
+
+                if extras:
+                    st.info(f"✨ **{len(extras)} tipo(s) extra(s)**")
+                    for extra in extras:
+                        st.caption(f"✅ {extra}")
+                else:
+                    st.warning("📭 **Nenhum dado adicional**")
+                    st.caption("💡 Carregue LiDAR ou dados espaciais")
+
+            with col3:
+                st.subheader("🚀 Próximos Passos")
+                if dados_basicos_ok:
+                    try:
+                        from config.configuracoes_globais import obter_configuracao_global
+                        config_global = obter_configuracao_global()
+                        configurado = config_global.get('configurado', False)
+
+                        if not configurado:
+                            st.warning("⚙️ **Configure o sistema**")
+                            st.caption("📍 Vá para Etapa 0")
+                        else:
+                            # Verificar etapas executadas
+                            hip_ok = hasattr(st.session_state,
+                                             'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None
+                            vol_ok = hasattr(st.session_state,
+                                             'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None
+                            inv_ok = hasattr(st.session_state,
+                                             'inventario_processado') and st.session_state.inventario_processado is not None
+
+                            if not hip_ok:
+                                st.info("🌳 **Execute Etapa 1**")
+                                st.caption("📍 Modelos Hipsométricos")
+                            elif not vol_ok:
+                                st.info("📊 **Execute Etapa 2**")
+                                st.caption("📍 Modelos Volumétricos")
+                            elif not inv_ok:
+                                st.info("📈 **Execute Etapa 3**")
+                                st.caption("📍 Inventário Final")
+                            else:
+                                st.success("✅ **Core completo!**")
+                                if dados_lidar_encontrados:
+                                    st.caption("🛩️ LiDAR disponível")
+                                else:
+                                    st.caption("💡 Carregue LiDAR")
+                    except:
+                        st.warning("⚙️ **Configure primeiro**")
+                        st.caption("📍 Etapa 0 obrigatória")
+                else:
+                    st.error("📁 **Carregue dados**")
+                    st.caption("📍 Inventário + Cubagem")
+
+            # Informações de sessão
+            st.markdown("---")
+            st.markdown("**💾 Informações da Sessão:**")
+
+            arquivos_na_sessao = []
+            if tem_inventario:
+                arquivos_na_sessao.append("📋 Inventário")
+            if tem_cubagem:
+                arquivos_na_sessao.append("📏 Cubagem")
+            if dados_lidar_encontrados:
+                arquivos_na_sessao.append("🛩️ LiDAR")
+            if arquivos_espaciais_encontrados:
+                arquivos_na_sessao.append("🗺️ Espaciais")
+
+            # Verificar resultados processados
+            resultados_na_sessao = []
+            if hasattr(st.session_state,
+                       'resultados_hipsometricos') and st.session_state.resultados_hipsometricos is not None:
+                resultados_na_sessao.append("🌳 Hipsométricos")
+            if hasattr(st.session_state,
+                       'resultados_volumetricos') and st.session_state.resultados_volumetricos is not None:
+                resultados_na_sessao.append("📊 Volumétricos")
+            if hasattr(st.session_state,
+                       'inventario_processado') and st.session_state.inventario_processado is not None:
+                resultados_na_sessao.append("📈 Inventário Final")
+
+            if arquivos_na_sessao:
+                st.success("**Arquivos persistidos:** " + " • ".join(arquivos_na_sessao))
+
+            if resultados_na_sessao:
+                st.info("**Resultados salvos:** " + " • ".join(resultados_na_sessao))
+
+            if not arquivos_na_sessao and not resultados_na_sessao:
+                st.warning("📭 Nenhum dado na sessão")
+
+            st.caption("💡 **Dica:** Dados permanecem ao navegar entre páginas, mas são perdidos ao fechar o navegador")
 
     except Exception as e:
-        st.error(f"❌ Erro ao mostrar preview: {e}")
+        st.error(f"❌ Erro ao mostrar preview dos dados: {e}")
+        with st.expander("🔍 Detalhes do erro"):
+            st.code(traceback.format_exc())
 
 
 def mostrar_preview_dados_lidar():
-    """Mostra preview específico dos dados LiDAR"""
+    """Mostra preview específico dos dados LiDAR - VERSÃO ORIGINAL"""
     dados_lidar_encontrados = False
 
     # Verificar arquivo LAS/LAZ
@@ -638,8 +1380,6 @@ def mostrar_preview_dados_lidar():
     # Mostrar botão de acesso ao LiDAR se há dados
     if dados_lidar_encontrados:
         st.info("🛩️ **Dados LiDAR disponíveis!** Acesse a Etapa 4 para análise completa.")
-        #if st.button("🚀 Ir para Etapa 4 - LiDAR", type="primary"):
-        #    st.switch_page("pages/4_🛩️_Dados_LiDAR.py")
 
 
 def mostrar_status_sistema():
@@ -732,87 +1472,6 @@ def mostrar_status_sistema():
         st.error(f"❌ Erro ao mostrar status do sistema: {e}")
 
 
-def main():
-    """Função principal da aplicação - VERSÃO COMPLETA COM LAS/LAZ"""
-    try:
-        # Inicializar configurações globais
-        inicializar_configuracoes_globais()
-
-        #st.image("./images/logo.png")
-
-        # Criar cabeçalho
-        criar_cabecalho_greenvista("Página Principal")
-
-        # Criar sidebar com uploads - VERSÃO COMPLETA
-        arquivos = criar_sidebar_melhorada()
-
-        # Processar arquivos se carregados - COM TRATAMENTO SEGURO
-        if arquivos['inventario'] is not None:
-            dados_inventario = processar_dados_inventario(arquivos['inventario'])
-            if dados_inventario is not None:
-                st.session_state.dados_inventario = dados_inventario
-
-        if arquivos['cubagem'] is not None:
-            dados_cubagem = processar_dados_cubagem(arquivos['cubagem'])
-            if dados_cubagem is not None:
-                st.session_state.dados_cubagem = dados_cubagem
-
-        # === SEÇÃO PRINCIPAL DA PÁGINA ===
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "📋 Instruções",
-            "📊 Status do Sistema",
-            "⚠️ Alertas",
-            "👨🏻‍💻 Quem somos"
-        ])
-
-        with tab1:
-            criar_secao_instrucoes()
-
-        with tab2:
-            mostrar_status_sistema()
-
-        with tab3:
-            mostrar_alertas_sistema()
-
-        with tab4:
-            mostrar_empresa()
-
-        # Navegação rápida
-        st.markdown("---")
-        criar_navegacao_rapida_botoes()
-
-        # === INFORMAÇÕES DE PERSISTÊNCIA ===
-        mostrar_info_persistencia()
-
-    except Exception as e:
-        st.error("❌ Erro crítico na aplicação principal")
-
-        with st.expander("🔍 Detalhes do Erro Crítico"):
-            st.code(f"Erro: {str(e)}")
-            st.code(traceback.format_exc())
-
-        # Oferecer reset do sistema
-        st.warning("🔄 **Solução:** Tente recarregar a página ou limpar o cache")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("🔄 Recarregar Página", type="primary"):
-                st.rerun()
-
-        with col2:
-            if st.button("🗑️ Limpar Cache", type="secondary"):
-                # Limpar session_state
-                keys_para_limpar = [k for k in st.session_state.keys()
-                                    if not k.startswith('FormSubmitter')]
-                for key in keys_para_limpar:
-                    try:
-                        del st.session_state[key]
-                    except:
-                        pass
-                st.success("✅ Cache limpo! Recarregando...")
-                st.rerun()
-
-
 def mostrar_info_persistencia():
     """Mostra informações sobre persistência na sessão"""
     try:
@@ -887,6 +1546,283 @@ def mostrar_info_persistencia():
 
     except Exception as e:
         st.error(f"❌ Erro ao mostrar informações de persistência: {e}")
+
+
+def main():
+    """Função principal da aplicação - VERSÃO COMPLETA COM LAS/LAZ E PREVIEW EXPANDIDO"""
+    try:
+        # Inicializar configurações globais
+        inicializar_configuracoes_globais()
+
+        # Criar cabeçalho
+        criar_cabecalho_greenvista("Página Principal")
+
+        # Criar sidebar com uploads - VERSÃO COMPLETA
+        arquivos = criar_sidebar_melhorada()
+
+        st.markdown('''
+        O sistema LiDAR do **GreenVista** representa uma solução completa e robusta para integração de dados 
+        de sensoriamento remoto com inventários florestais tradicionais. Combina facilidade de uso com
+         capacidades técnicas avançadas, oferecendo desde processamento básico até análises estruturais 
+         sofisticadas.
+         **Ideal para:** Empresas florestais que desejam modernizar seus inventários com tecnologia
+          LiDAR sem complexidade técnica excessiva.
+            
+        '''  )
+
+        with st.expander("🛩️ Saiba mais sobre a análise do sistema de processamento LiDAR do **GreenVista**"):
+            st.markdown("""
+
+            O sistema **GreenVista** integra processamento de dados LiDAR para análise florestal, oferecendo duas abordagens principais:
+            
+            1. **Processamento Direto LAS/LAZ** - Arquivos brutos do sensor
+            2. **Integração de Métricas** - CSV/Excel pré-processados
+            
+            ## 🏗️ Arquitetura do Sistema
+            
+            ### Componentes Principais
+            
+            #### 1. **Configuração Central**
+            - **Configurações por Espécie**: Eucalipto, Pinus, Nativa
+            - **Perfis de Processamento**: Rápido, Balanceado, Preciso, Memória Limitada
+            - **Validação de Parâmetros**: Limites automáticos para métricas
+            - **Otimização Dinâmica**: Ajuste baseado no tamanho do arquivo
+                    
+            #### 2. **Processador LAS Integrado** 
+            - **Gestão de Memória**: Processamento em chunks otimizado
+            - **Validação Automática**: Verificação de estrutura e qualidade
+            - **Interface Streamlit**: Feedback em tempo real
+            - **Métricas Abrangentes**: 15+ métricas estruturais calculadas
+            
+            ### Funcionalidades Avançadas
+            
+            #### **Processamento Inteligente**
+            - ✅ **Chunks Adaptativos**: 100K-2M pontos por chunk baseado na memória
+            - ✅ **Validação Estrutural**: Verificação de coordenadas, alturas e geometria  
+            - ✅ **Otimização de Memória**: Garbage collection automático
+            - ✅ **Progress Tracking**: Monitoramento em tempo real
+            
+            #### **Métricas Calculadas**
+            
+            #### **Integração com Inventário**
+            - 🎯 **Parcelas Georreferenciadas**: Usa coordenadas X,Y quando disponíveis
+            - 🎯 **Grid Automático**: Cria malha quando coordenadas não existem
+            - 🎯 **Validação Cruzada**: Comparação campo vs LiDAR
+            - 🎯 **Calibração de Modelos**: Ajuste hipsométrico com dados LiDAR
+            
+            ## 🔄 Fluxo de Trabalho
+            
+            ### Cenário 1: Processamento LAS/LAZ
+            ```mermaid
+           
+                A[Upload Arquivo LAS] --> B{Validar Estrutura}
+                B -->|✅ Válido| C[Definir Parcelas]
+                B -->|❌ Inválido| D[Erro/Instruções]
+                C --> E{Tamanho Arquivo}
+                E -->|Grande| F[Processamento Chunks]
+                E -->|Pequeno| G[Processamento Direto]
+                F --> H[Calcular Métricas]
+                G --> H
+                H --> I[Integrar com Inventário]
+                I --> J[Análise Comparativa]
+            ```
+            
+            ### Cenário 2: Métricas Pré-processadas
+            ```mermaid
+    
+                A[Upload CSV/Excel] --> B[Validar Colunas]
+                B --> C[Padronizar Nomes]
+                C --> D[Limpar Dados]
+                D --> E[Integrar com Inventário]
+                E --> F[Comparação Campo-LiDAR]
+                F --> G[Gerar Alertas]
+            ```
+            
+            ## 📊 Interface de Usuário
+            
+            ### Página Principal
+            
+            #### **Recursos de Interface**
+            - 🎨 **Identidade Visual**: Cabeçalho GreenVista consistente
+            - 📱 **Layout Responsivo**: Tabs dinâmicas baseadas em dados disponíveis
+            - 🔄 **Estado Persistente**: Dados salvos entre sessões
+            - 📋 **Feedback Contextual**: Mensagens específicas por situação
+            
+            #### **Controle de Fluxo Inteligente**
+            
+            ## 🛡️ Robustez e Confiabilidade
+            
+            ### Validação Multinível
+            
+            #### **Nível 1: Arquivo**
+            - Formato (.las/.laz)
+            - Tamanho (máx 500MB)
+            - Estrutura (coordenadas XYZ)
+            
+            #### **Nível 2: Dados**
+            - Número de pontos (máx 50M)
+            - Alturas realísticas (0.1-150m)
+            - Geometria válida
+            
+            #### **Nível 3: Métricas**
+            - Valores dentro de limites esperados
+            - Detecção de outliers (IQR 3×)
+            - Consistência entre parcelas
+            
+            ### Gestão de Erros
+            
+            ## 🔧 Recursos Técnicos Avançados
+            
+            ### Otimização de Performance
+            
+            #### **Processamento em Chunks**
+            - **Tamanho Adaptativo**: 100K-2M pontos baseado na memória disponível
+            - **Gestão de Memória**: Limpeza automática a cada 3 chunks
+            - **Progress Tracking**: Feedback visual em tempo real
+            
+            #### **Algoritmos Otimizados**
+            
+            ### Integração Inteligente
+            
+            #### **Detecção Automática de Parcelas**
+            1. **Com Coordenadas**: Parcelas circulares georreferenciadas
+            2. **Sem Coordenadas**: Grid estimado baseado na distribuição
+            3. **Grid Automático**: Células 20×20m para análise exploratória
+            
+            #### **Calibração de Modelos**
+            
+            ## 📈 Análises Disponíveis
+            
+            ### 1. **Comparação Campo vs LiDAR**
+            - Correlação e R²
+            - RMSE e bias sistemático
+            - Detecção de outliers
+            - Gráficos de dispersão e resíduos
+            
+            ### 2. **Análise Estrutural**
+            - Distribuição de alturas por talhão
+            - Métricas de complexidade estrutural
+            - Índices de diversidade (Shannon)
+            - Cobertura e densidade do dossel
+            
+            ### 3. **Calibração de Modelos**
+            - Ajuste de modelos hipsométricos
+            - Validação cruzada
+            - Comparação pré/pós calibração
+            - Métricas de melhoria
+            
+            ### 4. **Alertas Automáticos**
+            - Correlação baixa (<0.6)
+            - Outliers excessivos (>10%)
+            - Bias sistemático (>2m)
+            - Cobertura insuficiente (<30%)
+            
+            ## 💾 Sistema de Persistência
+            
+            ### Gerenciamento de Estado
+            
+            ### Downloads Disponíveis
+            - 📊 **CSV/Excel**: Métricas completas
+            - 📄 **Relatório MD**: Análise detalhada  
+            - 📈 **Métricas JSON**: Validação técnica
+            - 🎯 **Outliers CSV**: Parcelas problemáticas
+            
+            ## 🚀 Vantagens Competitivas
+            
+            ### ✅ **Facilidade de Uso**
+            - Interface intuitiva sem conhecimento técnico
+            - Processamento automático com configuração mínima
+            - Feedback visual constante
+            
+            ### ✅ **Flexibilidade**
+            - Suporte a LAS/LAZ e métricas pré-processadas
+            - Configurações por espécie florestal
+            - Integração com qualquer inventário
+            
+            ### ✅ **Robustez**
+            - Validação multinível
+            - Gestão inteligente de memória
+            - Recuperação de erros graceful
+            
+            ### ✅ **Completude**
+            - 15+ métricas estruturais
+            - Análises comparativas automáticas
+            - Relatórios prontos para uso
+            
+            ## 🎯 Casos de Uso Típicos
+            
+            ### 1. **Validação de Inventário**
+            Empresa quer verificar se medições de campo são consistentes com dados LiDAR
+            
+            ### 2. **Calibração de Modelos**
+            Melhorar modelos hipsométricos usando dados LiDAR como referência
+            
+            ### 3. **Mapeamento de Estrutura**
+            Analisar heterogeneidade estrutural em diferentes talhões
+            
+            ### 4. **Detecção de Problemas**
+            Identificar parcelas com medições inconsistentes ou problemáticas
+                       
+             """)
+
+        # === SEÇÃO PRINCIPAL DA PÁGINA ===
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📋 Instruções",
+            "📊 Status do Sistema",
+            "⚠️ Alertas",
+            "👨🏻‍💻 Quem somos"
+        ])
+
+        with tab1:
+            criar_secao_instrucoes()
+
+        with tab2:
+            mostrar_status_sistema()
+
+            # Preview inteligente dos dados - NOVA FUNCIONALIDADE
+            st.markdown("---")
+            mostrar_preview_inteligente()
+            # === INFORMAÇÕES DE PERSISTÊNCIA ===
+            mostrar_info_persistencia()
+
+        with tab3:
+            mostrar_alertas_sistema()
+
+        with tab4:
+            mostrar_empresa()
+
+        # Navegação rápida
+        st.markdown("---")
+        criar_navegacao_rapida_botoes()
+
+
+    except Exception as e:
+        st.error("❌ Erro crítico na aplicação principal")
+
+        with st.expander("🔍 Detalhes do Erro Crítico"):
+            st.code(f"Erro: {str(e)}")
+            st.code(traceback.format_exc())
+
+        # Oferecer reset do sistema
+        st.warning("🔄 **Solução:** Tente recarregar a página ou limpar o cache")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("🔄 Recarregar Página", type="primary"):
+                st.rerun()
+
+        with col2:
+            if st.button("🗑️ Limpar Cache", type="secondary"):
+                # Limpar session_state
+                keys_para_limpar = [k for k in st.session_state.keys()
+                                    if not k.startswith('FormSubmitter')]
+                for key in keys_para_limpar:
+                    try:
+                        del st.session_state[key]
+                    except:
+                        pass
+                st.success("✅ Cache limpo! Recarregando...")
+                st.rerun()
 
 
 if __name__ == "__main__":

@@ -12,6 +12,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import time
 import traceback
+import json
 
 # Importar processadores LiDAR originais
 from processors.lidar import (
@@ -19,7 +20,6 @@ from processors.lidar import (
     integrar_dados_lidar_inventario,
     comparar_alturas_campo_lidar,
     calibrar_modelo_hipsometrico_com_lidar,
-    analisar_estrutura_florestal_lidar,
     gerar_alertas_automaticos_lidar,
     calcular_metricas_validacao_lidar,
     exportar_dados_integrados,
@@ -28,7 +28,6 @@ from processors.lidar import (
 
 # Importar NOVO processador LAS integrado
 from processors.las_processor_integrado import (
-    ProcessadorLASIntegrado,
     processar_las_com_interface,
     mostrar_resultados_processamento_las,
     criar_interface_processamento_las,
@@ -42,9 +41,6 @@ from config.configuracoes_globais import (
 )
 
 from config.config import MENSAGENS_AJUDA_LIDAR, CORES_LIDAR
-
-# Importar utilitários
-from utils.formatacao import formatar_brasileiro, formatar_numero_inteligente
 
 # Importar componentes de UI para manter identidade visual
 from ui.components import (
@@ -392,7 +388,7 @@ def processar_e_integrar_lidar_metricas(arquivo_lidar):
     try:
         # Processar dados LiDAR
         with st.spinner("🔄 Processando dados LiDAR..."):
-            df_lidar = processar_dados_lidar(arquivo_lidar)
+            df_lidar = processar_dados_lidar_melhorado(arquivo_lidar)
 
         if df_lidar is None:
             return None, None, None
@@ -941,7 +937,27 @@ def mostrar_alertas_lidar(alertas):
 
 
 def mostrar_downloads_lidar(df_integrado, stats_comparacao, alertas):
-    """Mostra opções de download para dados LiDAR"""
+    """Mostra opções de download para dados LiDAR - VERSÃO CORRIGIDA"""
+    import json
+    import numpy as np
+
+    def convert_numpy_types(obj):
+        """Converte tipos numpy para tipos Python nativos para serialização JSON"""
+        if isinstance(obj, dict):
+            return {key: convert_numpy_types(value) for key, value in obj.items()}
+        elif isinstance(obj, list):
+            return [convert_numpy_types(item) for item in obj]
+        elif isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        elif hasattr(obj, 'item'):  # Para scalar numpy
+            return obj.item()
+        else:
+            return obj
+
     st.header("💾 Downloads")
 
     col1, col2, col3 = st.columns(3)
@@ -949,41 +965,65 @@ def mostrar_downloads_lidar(df_integrado, stats_comparacao, alertas):
     with col1:
         # Download dados integrados
         if st.button("📊 Dados Integrados", key="btn_download_integrados"):
-            csv_integrados = exportar_dados_integrados(df_integrado)
-            st.download_button(
-                "📥 Baixar Dados Integrados",
-                csv_integrados,
-                "dados_campo_lidar_integrados.csv",
-                "text/csv",
-                key=gerar_key_unica("download_integrados")
-            )
+            try:
+                csv_integrados = exportar_dados_integrados(df_integrado)
+                st.download_button(
+                    "📥 Baixar Dados Integrados",
+                    csv_integrados,
+                    "dados_campo_lidar_integrados.csv",
+                    "text/csv",
+                    key=gerar_key_unica("download_integrados")
+                )
+            except Exception as e:
+                st.error(f"❌ Erro ao exportar dados integrados: {str(e)}")
 
     with col2:
         # Download relatório de comparação
         if stats_comparacao:
-            relatorio = gerar_relatorio_integracao_lidar(df_integrado, stats_comparacao, alertas)
-            st.download_button(
-                "📄 Relatório LiDAR",
-                relatorio,
-                "relatorio_integracao_lidar.md",
-                "text/markdown",
-                key=gerar_key_unica("download_relatorio_lidar")
-            )
+            try:
+                relatorio = gerar_relatorio_integracao_lidar(df_integrado, stats_comparacao, alertas)
+                st.download_button(
+                    "📄 Relatório LiDAR",
+                    relatorio,
+                    "relatorio_integracao_lidar.md",
+                    "text/markdown",
+                    key=gerar_key_unica("download_relatorio_lidar")
+                )
+            except Exception as e:
+                st.error(f"❌ Erro ao gerar relatório: {str(e)}")
 
     with col3:
-        # Download métricas de validação
+        # Download métricas de validação - CORRIGIDO
         if st.button("📈 Métricas Validação", key="btn_download_validacao"):
-            metricas = calcular_metricas_validacao_lidar(df_integrado)
-            import json
-            json_metricas = json.dumps(metricas, indent=2, ensure_ascii=False)
-            st.download_button(
-                "📥 Baixar Métricas",
-                json_metricas,
-                "metricas_validacao_lidar.json",
-                "application/json",
-                key=gerar_key_unica("download_validacao")
-            )
+            try:
+                metricas = calcular_metricas_validacao_lidar(df_integrado)
 
+                # Converter tipos numpy para tipos Python nativos
+                metricas_serializaveis = convert_numpy_types(metricas)
+
+                json_metricas = json.dumps(metricas_serializaveis, indent=2, ensure_ascii=False)
+                st.download_button(
+                    "📥 Baixar Métricas",
+                    json_metricas,
+                    "metricas_validacao_lidar.json",
+                    "application/json",
+                    key=gerar_key_unica("download_validacao")
+                )
+            except Exception as e:
+                st.error(f"❌ Erro ao gerar métricas: {str(e)}")
+                # Fallback: salvar como texto simples
+                try:
+                    metricas = calcular_metricas_validacao_lidar(df_integrado)
+                    metricas_str = str(metricas)
+                    st.download_button(
+                        "📥 Baixar Métricas (TXT)",
+                        metricas_str,
+                        "metricas_validacao_lidar.txt",
+                        "text/plain",
+                        key=gerar_key_unica("download_validacao_txt")
+                    )
+                except Exception as e2:
+                    st.error(f"❌ Erro também no fallback: {str(e2)}")
 
 def mostrar_resumo_integracao():
     """Mostra resumo da integração LiDAR"""
@@ -1229,15 +1269,6 @@ def main():
         if not processamento_las_disponivel:
             st.warning("⚠️ **Processamento LAS indisponível** - instale dependências para habilitar")
 
-            with st.expander("📦 Como instalar dependências LAS"):
-                st.code("""
-pip install laspy[lazrs,laszip]
-pip install geopandas  
-pip install shapely
-pip install scipy
-                """)
-                st.info("💡 Após instalação, reinicie o Streamlit")
-
     # Botão para limpar dados (sem afetar uploads da sidebar)
     if hasattr(st.session_state, 'dados_lidar') or hasattr(st.session_state, 'dados_lidar_las'):
         st.markdown("---")
@@ -1257,6 +1288,180 @@ pip install scipy
     # Navegação rápida
     st.markdown("---")
     criar_navegacao_rapida_botoes()
+
+
+def debug_dados_lidar(df_lidar):
+    """
+    Função de debug para investigar problemas com dados LiDAR
+    """
+    st.subheader("🔍 Debug - Dados LiDAR")
+
+    if df_lidar is None:
+        st.error("❌ DataFrame LiDAR é None")
+        return
+
+    if len(df_lidar) == 0:
+        st.error("❌ DataFrame LiDAR está vazio")
+        return
+
+    # Informações básicas
+    st.info(f"📊 **Shape:** {df_lidar.shape}")
+    st.info(f"🏷️ **Colunas:** {list(df_lidar.columns)}")
+
+    # Verificar tipos de dados
+    st.write("**Tipos de dados:**")
+    tipos_df = pd.DataFrame({
+        'Coluna': df_lidar.dtypes.index,
+        'Tipo': df_lidar.dtypes.values,
+        'Não-nulos': df_lidar.count().values,
+        'Nulos': df_lidar.isnull().sum().values
+    })
+    st.dataframe(tipos_df)
+
+    # Preview dos dados
+    st.write("**Preview dos dados:**")
+    st.dataframe(df_lidar.head())
+
+    # Verificar colunas esperadas
+    colunas_esperadas = ['talhao', 'parcela', 'altura_media', 'altura_maxima']
+    colunas_encontradas = [col for col in colunas_esperadas if col in df_lidar.columns]
+    colunas_faltantes = [col for col in colunas_esperadas if col not in df_lidar.columns]
+
+    if colunas_encontradas:
+        st.success(f"✅ **Colunas encontradas:** {colunas_encontradas}")
+
+    if colunas_faltantes:
+        st.warning(f"⚠️ **Colunas faltantes:** {colunas_faltantes}")
+
+        # Sugestões de mapeamento
+        st.write("**Possíveis mapeamentos:**")
+        for col_faltante in colunas_faltantes:
+            if col_faltante == 'altura_media':
+                possiveis = [col for col in df_lidar.columns if
+                             any(palavra in col.lower() for palavra in ['zmean', 'mean', 'media'])]
+                if possiveis:
+                    st.info(f"• {col_faltante} → {possiveis}")
+            elif col_faltante == 'altura_maxima':
+                possiveis = [col for col in df_lidar.columns if
+                             any(palavra in col.lower() for palavra in ['zmax', 'max', 'maxima'])]
+                if possiveis:
+                    st.info(f"• {col_faltante} → {possiveis}")
+
+
+def mapear_colunas_lidar_automatico(df):
+    """
+    Mapeia automaticamente colunas LiDAR com nomes alternativos
+    """
+    if df is None or len(df) == 0:
+        return df
+
+    # Mapeamento de nomes alternativos
+    mapeamento = {
+        'altura_media': ['zmean', 'z_mean', 'mean_height', 'altura_media'],
+        'altura_maxima': ['zmax', 'z_max', 'max_height', 'altura_maxima'],
+        'altura_minima': ['zmin', 'z_min', 'min_height', 'altura_minima'],
+        'desvio_altura': ['zsd', 'z_sd', 'height_sd', 'desvio_altura'],
+        'cobertura': ['cover', 'coverage', 'canopy_cover', 'cobertura'],
+        'densidade': ['density', 'point_density', 'dens', 'densidade']
+    }
+
+    df_mapeado = df.copy()
+    colunas_mapeadas = []
+
+    for coluna_padrao, aliases in mapeamento.items():
+        if coluna_padrao not in df_mapeado.columns:
+            # Procurar por aliases
+            for alias in aliases:
+                colunas_encontradas = [col for col in df_mapeado.columns
+                                       if col.lower() == alias.lower()]
+                if colunas_encontradas:
+                    # Mapear a primeira coluna encontrada
+                    df_mapeado = df_mapeado.rename(columns={colunas_encontradas[0]: coluna_padrao})
+                    colunas_mapeadas.append(f"{colunas_encontradas[0]} → {coluna_padrao}")
+                    break
+
+    if colunas_mapeadas:
+        st.info(f"🔄 **Mapeamento automático:** {', '.join(colunas_mapeadas)}")
+
+    return df_mapeado
+
+
+def processar_dados_lidar_melhorado(arquivo_lidar):
+    """
+    Versão melhorada do processamento de dados LiDAR com debug
+    """
+    try:
+        # Carregar arquivo
+        df_lidar = processar_dados_lidar(arquivo_lidar)
+
+        if df_lidar is None:
+            st.error("❌ Erro no processamento inicial")
+            # Tentar carregamento direto para debug
+            st.write("🔄 Tentando carregamento direto para debug...")
+            df_debug = carregar_arquivo(arquivo_lidar)
+            if df_debug is not None:
+                debug_dados_lidar(df_debug)
+            return None
+
+        # Se conseguiu processar mas retornou 0 parcelas
+        if len(df_lidar) == 0:
+            st.warning("⚠️ Processamento inicial retornou 0 parcelas")
+
+            # Tentar carregamento direto para debug
+            df_debug = carregar_arquivo(arquivo_lidar)
+            if df_debug is not None:
+                st.write("🔍 **Dados originais carregados para análise:**")
+                debug_dados_lidar(df_debug)
+
+                # Tentar mapeamento automático
+                df_mapeado = mapear_colunas_lidar_automatico(df_debug)
+
+                if df_mapeado is not df_debug:  # Se houve mapeamento
+                    st.write("🔄 **Tentando reprocessar com mapeamento automático...**")
+
+                    # Verificar colunas mínimas
+                    if 'talhao' in df_mapeado.columns and 'parcela' in df_mapeado.columns:
+                        # Filtrar e limpar
+                        colunas_manter = ['talhao', 'parcela']
+                        metricas_disponiveis = ['altura_media', 'altura_maxima', 'altura_minima', 'desvio_altura',
+                                                'cobertura', 'densidade']
+
+                        for metrica in metricas_disponiveis:
+                            if metrica in df_mapeado.columns:
+                                colunas_manter.append(metrica)
+
+                        df_final = df_mapeado[colunas_manter].copy()
+
+                        # Converter tipos
+                        try:
+                            df_final['talhao'] = pd.to_numeric(df_final['talhao'], errors='coerce')
+                            df_final['parcela'] = pd.to_numeric(df_final['parcela'], errors='coerce')
+
+                            for col in colunas_manter[2:]:  # Pular talhao e parcela
+                                df_final[col] = pd.to_numeric(df_final[col], errors='coerce')
+                        except Exception as e:
+                            st.warning(f"⚠️ Erro na conversão: {e}")
+
+                        # Remover linhas inválidas
+                        df_final = df_final.dropna(subset=['talhao', 'parcela'])
+
+                        if len(df_final) > 0:
+                            st.success(f"✅ **Reprocessamento bem-sucedido:** {len(df_final)} parcelas")
+                            return df_final
+                        else:
+                            st.error("❌ Nenhuma linha válida após conversão")
+                    else:
+                        st.error("❌ Colunas talhao/parcela não encontradas mesmo após mapeamento")
+
+            return None
+
+        # Se processamento normal funcionou
+        st.success(f"✅ **Dados LiDAR processados normalmente:** {len(df_lidar)} parcelas")
+        return df_lidar
+
+    except Exception as e:
+        st.error(f"❌ Erro no processamento melhorado: {e}")
+        return None
 
 
 if __name__ == "__main__":

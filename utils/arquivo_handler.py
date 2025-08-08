@@ -9,13 +9,18 @@ import streamlit as st
 import io
 import zipfile
 import tempfile
-import os
+from typing import Optional, Dict, List
 from pathlib import Path
 import warnings
 
 warnings.filterwarnings('ignore')
 
-
+from utils.formatacao import (
+    processar_decimal_brasileiro,
+    detectar_formato_numerico,
+    processar_csv_brasileiro_automatico,
+    validar_conversao_brasileira
+)
 
 def detectar_separador_csv(conteudo_texto):
     """
@@ -70,13 +75,40 @@ def detectar_encoding_arquivo(arquivo_bytes):
         else:
             return 'utf-8'  # Default seguro
 
-    except Exception:
-        return 'utf-8'
+    except Exception as e:
+        st.error(f"❌ Erro ao carregar CSV: {e}")
+
+        # Tentar fallbacks
+        try:
+            st.info("🔄 Tentando métodos alternativos...")
+
+            # Fallback 1: Separadores comuns
+            for sep in [';', ',', '\t']:
+                try:
+                    arquivo.seek(0)
+                    df = pd.read_csv(arquivo, sep=sep, low_memory=False, on_bad_lines='skip')
+                    if len(df.columns) > 1:  # Se conseguiu separar em colunas
+                        df_processado = processar_csv_brasileiro_automatico(df)
+                        st.success(f"✅ CSV carregado com separador '{sep}'")
+                        return df_processado
+                except:
+                    continue
+
+            # Fallback 2: Sem separador específico (deixar pandas detectar)
+            arquivo.seek(0)
+            df = pd.read_csv(arquivo, low_memory=False, on_bad_lines='skip')
+            df_processado = processar_csv_brasileiro_automatico(df)
+            st.success(f"✅ CSV carregado com detecção automática")
+            return df_processado
+
+        except Exception as fallback_error:
+            st.error(f"❌ Todos os métodos falharam: {fallback_error}")
+            return None
 
 
 def carregar_csv(arquivo, encoding=None, separador=None):
     """
-    Carrega arquivo CSV com detecção automática de separador e encoding
+    Carrega arquivo CSV com detecção automática - VERSÃO CORRIGIDA
 
     Args:
         arquivo: Arquivo uploaded pelo Streamlit
@@ -125,40 +157,45 @@ def carregar_csv(arquivo, encoding=None, separador=None):
         nome_arquivo = getattr(arquivo, 'name', 'arquivo_csv')
         st.success(f"✅ CSV carregado: {len(df)} linhas, separador '{separador}', encoding '{encoding}'")
 
-        return df
+        # APLICAR CONVERSÃO BRASILEIRA AUTOMATICAMENTE
+        df_processado = processar_csv_brasileiro_automatico(df)
+
+        return df_processado
 
     except Exception as e:
         st.error(f"❌ Erro ao carregar CSV: {e}")
 
-        # Tentar fallbacks
+        # Tentar fallbacks com o objeto arquivo original
         try:
             st.info("🔄 Tentando métodos alternativos...")
 
             # Fallback 1: Separadores comuns
             for sep in [';', ',', '\t']:
                 try:
-                    arquivo.seek(0)
+                    arquivo.seek(0)  # Reset posição do arquivo
                     df = pd.read_csv(arquivo, sep=sep, low_memory=False, on_bad_lines='skip')
                     if len(df.columns) > 1:  # Se conseguiu separar em colunas
+                        df_processado = processar_csv_brasileiro_automatico(df)
                         st.success(f"✅ CSV carregado com separador '{sep}'")
-                        return df
-                except:
+                        return df_processado
+                except Exception:
                     continue
 
             # Fallback 2: Sem separador específico (deixar pandas detectar)
-            arquivo.seek(0)
+            arquivo.seek(0)  # Reset posição do arquivo
             df = pd.read_csv(arquivo, low_memory=False, on_bad_lines='skip')
+            df_processado = processar_csv_brasileiro_automatico(df)
             st.success(f"✅ CSV carregado com detecção automática")
-            return df
+            return df_processado
 
         except Exception as fallback_error:
             st.error(f"❌ Todos os métodos falharam: {fallback_error}")
             return None
 
-
 def carregar_excel(arquivo):
     """
     Carrega arquivo Excel (.xlsx, .xls, .xlsb)
+    CORRIGIDO: Aplica conversão brasileira automática
 
     Args:
         arquivo: Arquivo uploaded pelo Streamlit
@@ -202,8 +239,11 @@ def carregar_excel(arquivo):
             else:
                 raise e
 
-        st.success(f"✅ Excel carregado: {len(df)} linhas, engine '{engine}'")
-        return df
+        # APLICAR CONVERSÃO BRASILEIRA AUTOMATICAMENTE
+        df_processado = processar_csv_brasileiro_automatico(df)
+
+        st.success(f"✅ Excel carregado: {len(df_processado)} linhas, engine '{engine}'")
+        return df_processado
 
     except Exception as e:
         st.error(f"❌ Erro ao carregar Excel: {e}")
@@ -258,18 +298,24 @@ def carregar_shapefile(arquivo_zip):
 def carregar_arquivo(arquivo):
     """
     Função principal para carregar qualquer tipo de arquivo suportado
-    VERSÃO CORRIGIDA: Trata adequadamente objetos DataFrame vs arquivos
+    VERSÃO CORRIGIDA: Com suporte nativo ao formato brasileiro
 
     Args:
         arquivo: Arquivo uploaded pelo Streamlit OU DataFrame
 
     Returns:
-        DataFrame ou GeoDataFrame
+        DataFrame ou GeoDataFrame com dados normalizados
     """
     # CORREÇÃO PRINCIPAL: Verificar se já é um DataFrame
     if isinstance(arquivo, pd.DataFrame):
-        st.info("📊 DataFrame já carregado - retornando diretamente")
-        return arquivo
+        st.info("📊 DataFrame já carregado - verificando formato numérico...")
+
+        # Mesmo para DataFrames já carregados, verificar se precisam de conversão
+        try:
+            df_processado = processar_csv_brasileiro_automatico(arquivo)
+            return df_processado
+        except Exception:
+            return arquivo
 
     if arquivo is None:
         return None
@@ -289,10 +335,10 @@ def carregar_arquivo(arquivo):
 
         # Roteamento por tipo de arquivo
         if extensao == '.csv':
-            return carregar_csv(arquivo)
+            return carregar_csv(arquivo)  # Já inclui conversão brasileira
 
         elif extensao in ['.xlsx', '.xls', '.xlsb']:
-            return carregar_excel(arquivo)
+            return carregar_excel(arquivo)  # Já inclui conversão brasileira
 
         elif extensao == '.zip':
             # Verificar se é shapefile
@@ -327,11 +373,121 @@ def carregar_arquivo(arquivo):
             st.code(str(e))
         return None
 
+def validar_dados_brasileiro(df, tipo_dados='inventario'):
+    """
+    Valida dados considerando formato brasileiro
+    CORRIGIDO: Usa apenas funções que existem
+
+    Args:
+        df: DataFrame a validar
+        tipo_dados: Tipo dos dados para validação específica
+
+    Returns:
+        dict: Relatório de validação
+    """
+    relatorio = {
+        'formato_detectado': {},
+        'conversoes_necessarias': [],
+        'dados_validos': True,
+        'recomendacoes': []
+    }
+
+    try:
+        # Verificar formato de cada coluna numérica esperada
+        colunas_numericas_esperadas = {
+            'inventario': ['D_cm', 'H_m', 'idade_anos'],
+            'cubagem': ['D_cm', 'H_m', 'd_cm', 'h_m'],
+            'coordenadas': ['x', 'y', 'precisao'],
+            'lidar': ['altura_media', 'altura_maxima', 'cobertura', 'densidade']
+        }
+
+        colunas_verificar = colunas_numericas_esperadas.get(tipo_dados, [])
+
+        for coluna in colunas_verificar:
+            if coluna in df.columns:
+                formato = detectar_formato_numerico(df[coluna])
+                relatorio['formato_detectado'][coluna] = formato
+
+                if formato == 'brasileiro':
+                    relatorio['conversoes_necessarias'].append(coluna)
+                elif formato == 'nao_numerico':
+                    relatorio['dados_validos'] = False
+                    relatorio['recomendacoes'].append(f"Coluna {coluna} não contém dados numéricos válidos")
+
+        # Gerar recomendações
+        if relatorio['conversoes_necessarias']:
+            relatorio['recomendacoes'].append("Aplicar conversão de formato brasileiro nas colunas detectadas")
+
+        if not relatorio['conversoes_necessarias'] and not any(
+                fmt == 'nao_numerico' for fmt in relatorio['formato_detectado'].values()
+        ):
+            relatorio['recomendacoes'].append("Dados já estão em formato adequado para processamento")
+
+    except Exception as e:
+        relatorio['erro'] = str(e)
+        relatorio['dados_validos'] = False
+
+    return relatorio
+
+
+def mostrar_status_conversao_brasileira():
+    """
+    Mostra status atual da conversão brasileira na interface
+    CORRIGIDO: Usa funções que existem
+    """
+    st.subheader("🇧🇷 Status da Conversão Brasileira")
+
+    # Verificar dados carregados
+    dados_disponiveis = []
+
+    if hasattr(st.session_state, 'dados_inventario') and st.session_state.dados_inventario is not None:
+        dados_disponiveis.append(('Inventário', st.session_state.dados_inventario))
+
+    if hasattr(st.session_state, 'dados_cubagem') and st.session_state.dados_cubagem is not None:
+        dados_disponiveis.append(('Cubagem', st.session_state.dados_cubagem))
+
+    if hasattr(st.session_state, 'arquivo_metricas_lidar') and st.session_state.arquivo_metricas_lidar is not None:
+        # Carregar métricas LiDAR se for arquivo
+        try:
+            df_lidar = carregar_arquivo(st.session_state.arquivo_metricas_lidar)
+            if df_lidar is not None:
+                dados_disponiveis.append(('Métricas LiDAR', df_lidar))
+        except:
+            pass
+
+    if not dados_disponiveis:
+        st.info("📊 Nenhum dado carregado ainda")
+        return
+
+    # Analisar cada dataset
+    for nome, df in dados_disponiveis:
+        with st.expander(f"📋 {nome} - {len(df)} registros"):
+
+            # Detectar formatos
+            formatos_encontrados = {}
+            for coluna in df.select_dtypes(include=['object']).columns[:10]:  # Máximo 10 colunas
+                formato = detectar_formato_numerico(df[coluna])
+                if formato != 'nao_numerico':
+                    formatos_encontrados[coluna] = formato
+
+            if formatos_encontrados:
+                st.write("**Formatos detectados:**")
+                for coluna, formato in formatos_encontrados.items():
+                    emoji = "🇧🇷" if formato == "brasileiro" else "🌍" if formato == "internacional" else "🔀"
+                    st.write(f"• {coluna}: {emoji} {formato}")
+            else:
+                st.write("✅ **Dados já processados** (todos os campos numéricos)")
+
+            # Mostrar tipos de dados atuais
+            st.write("**Tipos de dados:**")
+            tipos_resumo = df.dtypes.value_counts()
+            for tipo, count in tipos_resumo.items():
+                st.write(f"• {tipo}: {count} coluna(s)")
 
 def validar_estrutura_arquivo(df, colunas_obrigatorias, nome_tipo="arquivo"):
     """
     Valida se o DataFrame possui as colunas obrigatórias
-    VERSÃO CORRIGIDA: Melhores verificações de validade
+    VERSÃO ORIGINAL MANTIDA - Sem alterações
 
     Args:
         df: DataFrame a ser validado
@@ -396,6 +552,7 @@ def validar_estrutura_arquivo(df, colunas_obrigatorias, nome_tipo="arquivo"):
 def criar_arquivo_exemplo_para_debug(tipo_arquivo="inventario"):
     """
     Cria arquivo de exemplo para debug quando há problemas de carregamento
+    VERSÃO ORIGINAL MANTIDA - Sem alterações
 
     Args:
         tipo_arquivo: Tipo do arquivo a criar exemplo
@@ -430,6 +587,7 @@ def criar_arquivo_exemplo_para_debug(tipo_arquivo="inventario"):
 def diagnosticar_problema_arquivo(arquivo, erro_original):
     """
     Diagnostica problemas no carregamento de arquivos
+    VERSÃO ORIGINAL MANTIDA - Sem alterações
 
     Args:
         arquivo: Objeto que causou erro
@@ -478,27 +636,32 @@ def diagnosticar_problema_arquivo(arquivo, erro_original):
 
 
 # Função auxiliar para sidebar e outras interfaces
+
 def carregar_arquivo_seguro(arquivo, nome_tipo="arquivo"):
     """
-    Versão segura da função carregar_arquivo com melhor tratamento de erros
+    Versão segura da função carregar_arquivo com tratamento de erros
+    CORRIGIDO: Usa processar_csv_brasileiro_automatico()
 
     Args:
         arquivo: Arquivo ou DataFrame
         nome_tipo: Nome para mensagens de erro
 
     Returns:
-        DataFrame ou None
+        DataFrame normalizado com formato brasileiro convertido
     """
     try:
-        # Se já é DataFrame, retornar diretamente
+        # Se já é DataFrame, verificar se precisa de conversão
         if isinstance(arquivo, pd.DataFrame):
-            return arquivo
+            try:
+                return processar_csv_brasileiro_automatico(arquivo)
+            except Exception:
+                return arquivo
 
         # Se é None, retornar None
         if arquivo is None:
             return None
 
-        # Tentar carregar normalmente
+        # Tentar carregar normalmente (já inclui conversão brasileira)
         resultado = carregar_arquivo(arquivo)
         return resultado
 
@@ -519,11 +682,10 @@ def carregar_arquivo_seguro(arquivo, nome_tipo="arquivo"):
 
         return None
 
-
 def exportar_dataframe(df, formato='csv', nome_base="dados_exportados"):
     """
     Exporta DataFrame em diferentes formatos
-    VERSÃO CORRIGIDA: Melhor tratamento de tipos
+    VERSÃO ORIGINAL MANTIDA - Sem alterações
 
     Args:
         df: DataFrame a ser exportado
@@ -572,18 +734,6 @@ def exportar_dataframe(df, formato='csv', nome_base="dados_exportados"):
         st.error(f"❌ Erro ao exportar dados: {e}")
         return None, None, None
 
-
-# utils/arquivo_handler.py - FUNÇÃO CRIAR_TEMPLATE_CSV
-"""
-Função para criar templates CSV de exemplo para o sistema GreenVista
-Gera arquivos de exemplo com estrutura correta para upload
-"""
-
-import pandas as pd
-import numpy as np
-from typing import Optional, Dict, List
-import streamlit as st
-from datetime import datetime
 
 
 def criar_template_csv(tipo_template: str, n_registros: int = 20) -> Optional[str]:
